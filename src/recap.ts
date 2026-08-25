@@ -66,6 +66,16 @@ async function main(): Promise<void> {
   if (matchups.length === 0) {
     throw new Error(`No matchups returned for Week ${week} — check the league ID, season, and cookies.`);
   }
+  console.log(`Fetched ${matchups.length} matchups for Week ${week} of ${espnConfig.seasonYear}.`);
+
+  const teams = matchups.flatMap((m) => [m.home, m.away]);
+  if (teams.every((t) => t.score === 0)) {
+    throw new Error(
+      `Week ${week} of season ${espnConfig.seasonYear} has no scores yet (every team is 0.0). ` +
+        `This usually means that season/week hasn't been played. To test now, set SEASON_YEAR ` +
+        `in .env to a completed season (e.g. 2025).`,
+    );
+  }
 
   const awards = computeAwards(matchups, week);
 

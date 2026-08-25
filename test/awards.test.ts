@@ -135,6 +135,27 @@ describe('computeAwards', () => {
   });
 });
 
+describe('weeks with no decided matchups (e.g. no scores yet)', () => {
+  const tieTeam = (id: number, name: string): NormalizedTeam => ({
+    teamId: id,
+    name,
+    score: 0,
+    players: [p(`${name} QB`, 0, 'QB', ['QB'])],
+  });
+
+  it('does not throw when every matchup is a tie', () => {
+    const matchups = [{ home: tieTeam(1, 'A'), away: tieTeam(2, 'B') }];
+    expect(() => computeAwards(matchups, 14)).not.toThrow();
+  });
+
+  it('returns placeholder luck awards rather than crashing', () => {
+    const matchups = [{ home: tieTeam(1, 'A'), away: tieTeam(2, 'B') }];
+    const awards = computeAwards(matchups, 14);
+    expect(awards.backedIntoIt.team).toBe('');
+    expect(awards.robbed.team).toBe('');
+  });
+});
+
 describe('optimalLineupPoints with two FLEX slots', () => {
   // Lineup: QB + 2x FLEX ('RB/WR/TE'). Two studs are stranded on the bench.
   const twoFlexTeam: NormalizedTeam = {

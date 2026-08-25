@@ -198,15 +198,19 @@ function computeLuck(
     allPlayWinPct: allPlayWinPct(t, teams),
   });
 
+  // No decided matchups (e.g. every team scored 0 because the week hasn't been played):
+  // there is no luck to award, so return placeholders instead of reducing an empty array.
+  const emptyLuck = { team: '', score: 0, allPlayWinPct: 0 };
+
   // Luckiest win: matchup winner with the LOWEST all-play %.
-  const backedIntoIt = winners
-    .map(withPct)
-    .reduce((a, b) => (b.allPlayWinPct < a.allPlayWinPct ? b : a));
+  const backedIntoIt = winners.length
+    ? winners.map(withPct).reduce((a, b) => (b.allPlayWinPct < a.allPlayWinPct ? b : a))
+    : emptyLuck;
 
   // Unluckiest loss: matchup loser with the HIGHEST all-play %.
-  const robbed = losers
-    .map(withPct)
-    .reduce((a, b) => (b.allPlayWinPct > a.allPlayWinPct ? b : a));
+  const robbed = losers.length
+    ? losers.map(withPct).reduce((a, b) => (b.allPlayWinPct > a.allPlayWinPct ? b : a))
+    : emptyLuck;
 
   return { backedIntoIt, robbed };
 }
