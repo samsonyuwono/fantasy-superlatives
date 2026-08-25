@@ -1,0 +1,45 @@
+name: Weekly Superlatives Recap
+
+on:
+  schedule:
+    # 13:00 UTC every Tuesday = 9am ET (EDT, Weeks ~1–8) / 8am ET (EST, Weeks ~9–14),
+    # always after Monday Night Football finalizes. The script itself gates to Weeks 1–14.
+    - cron: '0 13 * * 2'
+  workflow_dispatch:
+    inputs:
+      week:
+        description: 'Optional: force a specific NFL week (bypasses the Weeks 1–14 gate)'
+        required: false
+        type: string
+
+jobs:
+  recap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Send the weekly recap
+        run: |
+          if [ -n "${{ inputs.week }}" ]; then
+            npx tsx src/recap.ts --week "${{ inputs.week }}"
+          else
+            npx tsx src/recap.ts
+          fi
+        env:
+          ESPN_S2: ${{ secrets.ESPN_S2 }}
+          ESPN_SWID: ${{ secrets.ESPN_SWID }}
+          LEAGUE_ID: ${{ secrets.LEAGUE_ID }}
+          SEASON_YEAR: ${{ secrets.SEASON_YEAR }}
+          SEASON_WEEK1_TUESDAY: ${{ secrets.SEASON_WEEK1_TUESDAY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL: ${{ secrets.ANTHROPIC_MODEL }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
