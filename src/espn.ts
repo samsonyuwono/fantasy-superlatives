@@ -34,8 +34,9 @@ export interface WeekData {
   standings: StandingRow[];
 }
 
-function teamName(team: any): string {
-  return team?.name?.trim() || team?.abbreviation || `Team ${team?.id ?? '?'}`;
+export function teamName(team: any): string {
+  const name = typeof team?.name === 'string' ? team.name.replace(/\s+/g, ' ').trim() : '';
+  return name || team?.abbreviation || `Team ${team?.id ?? '?'}`;
 }
 
 function normalizePlayer(bp: any): NormalizedPlayer {
