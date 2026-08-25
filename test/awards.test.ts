@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeAwards } from '../src/awards.js';
+import { computeAwards, optimalLineupPoints } from '../src/awards.js';
 import type { NormalizedMatchup, NormalizedPlayer, NormalizedTeam } from '../src/awards.js';
 
 /**
@@ -132,5 +132,38 @@ describe('computeAwards', () => {
 
   it('reports the week number', () => {
     expect(awards.week).toBe(3);
+  });
+});
+
+describe('optimalLineupPoints with two FLEX slots', () => {
+  // Lineup: QB + 2x FLEX ('RB/WR/TE'). Two studs are stranded on the bench.
+  const twoFlexTeam: NormalizedTeam = {
+    teamId: 9,
+    name: 'FlexHeavy',
+    score: 21, // started 10 + 5 + 6
+    players: [
+      p('Only QB', 10, 'QB', ['QB']),
+      p('Started RB', 5, 'RB/WR/TE', ['RB', 'RB/WR/TE']),
+      p('Started WR', 6, 'RB/WR/TE', ['WR', 'RB/WR/TE']),
+      p('Bench Stud RB', 20, 'Bench', ['RB', 'RB/WR/TE']),
+      p('Bench Stud WR', 18, 'Bench', ['WR', 'RB/WR/TE']),
+    ],
+  };
+
+  it('fills both FLEX slots from the roster without reusing a player', () => {
+    // QB (only eligible = 10) + two best FLEX-eligible (20 + 18) = 48.
+    expect(optimalLineupPoints(twoFlexTeam)).toBeCloseTo(48, 5);
+  });
+
+  it('drives The Sleepwalker off both FLEX spots (48 optimal − 21 actual = 27)', () => {
+    const other: NormalizedTeam = {
+      teamId: 10,
+      name: 'Filler',
+      score: 100,
+      players: [p('Star', 100, 'QB', ['QB'])],
+    };
+    const awards = computeAwards([{ home: twoFlexTeam, away: other }], 1);
+    expect(awards.sleepwalker.team).toBe('FlexHeavy');
+    expect(awards.sleepwalker.pointsLeft).toBeCloseTo(27, 5);
   });
 });
