@@ -62,7 +62,7 @@ async function main(): Promise<void> {
 
   console.log(`Building the Week ${week} recap...`);
   const espnConfig = loadEspnConfig();
-  const { matchups, standings } = await fetchWeek(espnConfig, week);
+  const { matchups } = await fetchWeek(espnConfig, week);
   if (matchups.length === 0) {
     throw new Error(`No matchups returned for Week ${week} — check the league ID, season, and cookies.`);
   }
@@ -85,7 +85,7 @@ async function main(): Promise<void> {
   });
 
   const subject = formatSubject(week);
-  const body = formatEmailBody(awards, roast, standings);
+  const body = formatEmailBody(awards, roast);
 
   if (args.dryRun) {
     console.log('\n--- DRY RUN (not sending) ---');

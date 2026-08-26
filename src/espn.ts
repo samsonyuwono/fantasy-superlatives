@@ -21,17 +21,8 @@ export interface EspnConfig {
   swid: string;
 }
 
-export interface StandingRow {
-  name: string;
-  wins: number;
-  losses: number;
-  ties: number;
-  pointsFor: number;
-}
-
 export interface WeekData {
   matchups: NormalizedMatchup[];
-  standings: StandingRow[];
 }
 
 export function teamName(team: any): string {
@@ -84,15 +75,5 @@ export async function fetchWeek(cfg: EspnConfig, week: number): Promise<WeekData
       away: normalizeTeam(b.awayTeamId, b.awayScore, b.awayRoster, nameById),
     }));
 
-  const standings: StandingRow[] = teams
-    .map((t) => ({
-      name: teamName(t),
-      wins: t.wins ?? 0,
-      losses: t.losses ?? 0,
-      ties: t.ties ?? 0,
-      pointsFor: t.regularSeasonPointsFor ?? t.totalPointsScored ?? 0,
-    }))
-    .sort((a, b) => b.wins - a.wins || b.pointsFor - a.pointsFor);
-
-  return { matchups, standings };
+  return { matchups };
 }
