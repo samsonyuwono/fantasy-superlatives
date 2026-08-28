@@ -43,3 +43,21 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+
+      - name: Email me if the recap failed
+        if: failure()
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -sS -X POST https://api.resend.com/emails \
+            -H "Authorization: Bearer $RESEND_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg from "${EMAIL_FROM:-onboarding@resend.dev}" \
+              --arg to "$RECIPIENT_EMAIL" \
+              --arg url "$RUN_URL" \
+              '{from:$from, to:$to, subject:"⚠️ Fantasy recap FAILED",
+                text:("This week’s fantasy superlatives recap did not send. Check the run logs:\n" + $url)}')"
