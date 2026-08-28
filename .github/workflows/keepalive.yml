@@ -1,0 +1,26 @@
+name: Keepalive
+
+# GitHub auto-disables scheduled workflows after 60 days without repository
+# activity. This runs monthly and pushes a tiny commit, resetting that clock so
+# the weekly recap can't silently switch off mid-season.
+
+on:
+  schedule:
+    - cron: '0 12 1 * *' # 12:00 UTC on the 1st of every month
+  workflow_dispatch:
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Push a keepalive commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .keepalive
+          git add .keepalive
+          git commit -m "chore: keepalive" || exit 0
+          git push
