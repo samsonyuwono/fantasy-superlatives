@@ -33,23 +33,22 @@ jobs:
             npx tsx src/recap.ts
           fi
         env:
-          ESPN_S2: ${{ secrets.ESPN_S2 }}
-          ESPN_SWID: ${{ secrets.ESPN_SWID }}
-          LEAGUE_ID: ${{ secrets.LEAGUE_ID }}
-          SEASON_YEAR: ${{ secrets.SEASON_YEAR }}
-          SEASON_WEEK1_TUESDAY: ${{ secrets.SEASON_WEEK1_TUESDAY }}
+          LEAGUE_SECRETS_JSON: ${{ secrets.LEAGUE_SECRETS_JSON }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_MODEL: ${{ secrets.ANTHROPIC_MODEL }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+          OWNER_ALERT_EMAIL: ${{ secrets.OWNER_ALERT_EMAIL }}
 
-      - name: Email me if the recap failed
+      # Per-league failures are alerted from inside recap.ts (one alert per failed league, to
+      # OWNER_ALERT_EMAIL). This step is only a last-resort net for a whole-job crash before
+      # that logic could even run (e.g. `npm ci` failing) — it can't know which league failed.
+      - name: Email me if the whole job crashed
         if: failure()
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+          OWNER_ALERT_EMAIL: ${{ secrets.OWNER_ALERT_EMAIL }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           curl -sS -X POST https://api.resend.com/emails \
@@ -57,7 +56,7 @@ jobs:
             -H "Content-Type: application/json" \
             -d "$(jq -n \
               --arg from "${EMAIL_FROM:-onboarding@resend.dev}" \
-              --arg to "$RECIPIENT_EMAIL" \
+              --arg to "$OWNER_ALERT_EMAIL" \
               --arg url "$RUN_URL" \
-              '{from:$from, to:$to, subject:"⚠️ Fantasy recap FAILED",
-                text:("This week’s fantasy superlatives recap did not send. Check the run logs:\n" + $url)}')"
+              '{from:$from, to:$to, subject:"⚠️ Fantasy recap job CRASHED",
+                text:("The fantasy superlatives job failed before it could run any league. Check the run logs:\n" + $url)}')"

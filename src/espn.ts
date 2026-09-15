@@ -17,8 +17,14 @@ interface EspnClient {
 export interface EspnConfig {
   leagueId: number;
   seasonYear: number;
-  espnS2: string;
-  swid: string;
+  /** Omit both for a public league — no ESPN login is needed to read it. */
+  espnS2?: string;
+  swid?: string;
+}
+
+/** Public leagues need no cookies at all; only set them when both are present. */
+export function shouldSetCookies(cfg: EspnConfig): boolean {
+  return Boolean(cfg.espnS2 && cfg.swid);
 }
 
 export interface WeekData {
@@ -56,7 +62,9 @@ function normalizeTeam(
 /** Fetch and normalize a single week of the league. */
 export async function fetchWeek(cfg: EspnConfig, week: number): Promise<WeekData> {
   const client = new Client({ leagueId: cfg.leagueId });
-  client.setCookies({ espnS2: cfg.espnS2, SWID: cfg.swid });
+  if (shouldSetCookies(cfg)) {
+    client.setCookies({ espnS2: cfg.espnS2!, SWID: cfg.swid! });
+  }
 
   const [boxscores, teams] = await Promise.all([
     // For Weeks 1–14 the matchup period and scoring period both equal the NFL week.
