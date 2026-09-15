@@ -1,0 +1,13 @@
+{
+  "leagues": [
+    {
+      "id": "friends2026",
+      "displayName": "Friend Group Dynasty League",
+      "leagueId": 789012,
+      "seasonYear": 2026,
+      "seasonWeek1Tuesday": "2026-09-15",
+      "recipientEmails": ["friend1@example.com", "friend2@example.com"],
+      "requiresAuth": true
+    }
+  ]
+}

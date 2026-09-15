@@ -1,0 +1,20 @@
+{
+  "leagues": [
+    {
+      "id": "main",
+      "displayName": "Main League",
+      "leagueId": 205041,
+      "seasonYear": 2026,
+      "seasonWeek1Tuesday": "2026-09-15",
+      "recipientEmails": ["samson.yuwono@gmail.com"]
+    },
+    {
+      "id": "second",
+      "displayName": "Chicken Rice and Chopped Cheese",
+      "leagueId": 1977661635,
+      "seasonYear": 2026,
+      "seasonWeek1Tuesday": "2026-09-15",
+      "recipientEmails": ["samson.yuwono@gmail.com"]
+    }
+  ]
+}

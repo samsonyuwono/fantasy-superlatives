@@ -6,8 +6,8 @@ import type { WeekAwards } from './awards.js';
 
 const n = (x: number) => x.toFixed(1);
 
-export function formatSubject(week: number): string {
-  return `🏈 Week ${week} Superlatives`;
+export function formatSubject(week: number, leagueName: string): string {
+  return `🏈 ${leagueName} — Week ${week} Superlatives`;
 }
 
 export function formatEmailBody(awards: WeekAwards, roast: string): string {
