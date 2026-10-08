@@ -5,7 +5,13 @@
  */
 import Anthropic from '@anthropic-ai/sdk';
 import type { AllPlayRecord, WeekAwards } from './awards.js';
-import { SEASON_AWARD_KEYS, SEASON_AWARD_NAMES, type SeasonLeaderboard } from './leaderboard.js';
+import {
+  describeWeeks,
+  MIN_WINS_TO_LEAD,
+  SEASON_AWARD_KEYS,
+  SEASON_AWARD_NAMES,
+  type SeasonLeaderboard,
+} from './leaderboard.js';
 
 export interface RoastOptions {
   apiKey: string;
@@ -42,14 +48,13 @@ export function factSheet(a: WeekAwards, leaderboard?: SeasonLeaderboard): strin
 
 /** Season-to-date facts: repeat winners from this week, then each award's season leader. */
 function seasonFacts(a: WeekAwards, lb: SeasonLeaderboard): string[] {
-  const first = lb.weeks[0]!;
-  const last = lb.weeks[lb.weeks.length - 1]!;
-  const lines = [`Season so far (Weeks ${first}–${last}, ${lb.weeks.length} weeks counted):`];
+  const lines = [`Season so far (${describeWeeks(lb.weeks)}):`];
   for (const key of SEASON_AWARD_KEYS) {
     const teamId = a[key].teamId;
     if (teamId === undefined) continue;
     const wins = lb.counts[key].get(teamId) ?? 0;
-    if (wins >= 2) lines.push(`- ${a[key].team} has now won ${SEASON_AWARD_NAMES[key]} ${wins} times this season (including this week).`);
+    // Only repeat winners, and only once the award would show on the leaderboard.
+    if (wins >= Math.max(2, MIN_WINS_TO_LEAD[key])) lines.push(`- ${a[key].team} has now won ${SEASON_AWARD_NAMES[key]} ${wins} times this season (including this week).`);
   }
   for (const key of SEASON_AWARD_KEYS) {
     const leader = lb.leaders[key];

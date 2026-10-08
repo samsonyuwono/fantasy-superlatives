@@ -58,6 +58,20 @@ export interface SeasonLeaderboard {
   nameById: Map<number, string>;
 }
 
+/**
+ * The weeks a leaderboard covers, e.g. "Weeks 1–5", "Week 1", or "Weeks 1–5, skipping 3"
+ * when a week had no scores and wasn't counted.
+ */
+export function describeWeeks(weeks: number[]): string {
+  const first = weeks[0]!;
+  const last = weeks[weeks.length - 1]!;
+  if (first === last) return `Week ${first}`;
+  const skipped: number[] = [];
+  for (let w = first; w <= last; w++) if (!weeks.includes(w)) skipped.push(w);
+  const range = `Weeks ${first}–${last}`;
+  return skipped.length ? `${range}, skipping ${skipped.join(', ')}` : range;
+}
+
 /** Tally the awards over the given weeks. Returns undefined when none of them has scores yet. */
 export function buildLeaderboard(weeks: WeekMatchups[]): SeasonLeaderboard | undefined {
   const played = weeks
@@ -90,7 +104,7 @@ export function buildLeaderboard(weeks: WeekMatchups[]): SeasonLeaderboard | und
     SEASON_AWARD_KEYS.map((key) => {
       const tally = counts[key];
       const count = Math.max(0, ...tally.values());
-      if (count < Math.max(1, MIN_WINS_TO_LEAD[key])) return [key, null];
+      if (count < MIN_WINS_TO_LEAD[key]) return [key, null];
       const teams = [...tally]
         .filter(([, c]) => c === count)
         .map(([id]) => nameOf(id))

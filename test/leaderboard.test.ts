@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildLeaderboard } from '../src/leaderboard.js';
+import { buildLeaderboard, describeWeeks } from '../src/leaderboard.js';
 import type { NormalizedMatchup, NormalizedPlayer, NormalizedTeam } from '../src/awards.js';
 
 const p = (name: string, points: number, slot: string, eligibleSlots: string[]): NormalizedPlayer => ({
@@ -111,6 +111,17 @@ describe('buildLeaderboard', () => {
     ];
     const result = buildLeaderboard(bench)!;
     expect(result.leaders.sleepwalker).toEqual({ teams: ['Y'], count: 2 });
+  });
+});
+
+describe('describeWeeks', () => {
+  it('names a single week or a range', () => {
+    expect(describeWeeks([1])).toBe('Week 1');
+    expect(describeWeeks([1, 2, 3, 4, 5])).toBe('Weeks 1–5');
+  });
+
+  it('says which weeks in the range were skipped', () => {
+    expect(describeWeeks([1, 2, 4, 5])).toBe('Weeks 1–5, skipping 3');
   });
 });
 

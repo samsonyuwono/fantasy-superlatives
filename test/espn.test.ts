@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { teamName, shouldSetCookies, lineupSlotsFromCounts } from '../src/espn.js';
+import { teamName, shouldSetCookies, lineupSlotsFromCounts, mapInBatches, withRetry } from '../src/espn.js';
 
 describe('teamName', () => {
   it('collapses internal runs of whitespace to a single space', () => {
@@ -52,5 +52,44 @@ describe('lineupSlotsFromCounts', () => {
   it('returns undefined when there are no settings to read', () => {
     expect(lineupSlotsFromCounts(undefined)).toBeUndefined();
     expect(lineupSlotsFromCounts({ Bench: 7 })).toBeUndefined();
+  });
+});
+
+describe('withRetry', () => {
+  it('tries once more after a failure', async () => {
+    let calls = 0;
+    const result = await withRetry(async () => {
+      calls += 1;
+      if (calls === 1) throw new Error('ESPN hiccup');
+      return 'ok';
+    }, 0);
+    expect(result).toBe('ok');
+    expect(calls).toBe(2);
+  });
+
+  it('gives up after the second failure', async () => {
+    let calls = 0;
+    const failing = () => {
+      calls += 1;
+      return Promise.reject(new Error(`fail ${calls}`));
+    };
+    await expect(withRetry(failing, 0)).rejects.toThrow('fail 2');
+    expect(calls).toBe(2);
+  });
+});
+
+describe('mapInBatches', () => {
+  it('keeps the input order and never runs more than the batch size at once', async () => {
+    let running = 0;
+    let maxRunning = 0;
+    const result = await mapInBatches([1, 2, 3, 4, 5, 6, 7], 3, async (n) => {
+      running += 1;
+      maxRunning = Math.max(maxRunning, running);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      running -= 1;
+      return n * 10;
+    });
+    expect(result).toEqual([10, 20, 30, 40, 50, 60, 70]);
+    expect(maxRunning).toBe(3);
   });
 });

@@ -56,7 +56,7 @@ describe('factSheet', () => {
 
   it('calls out this week\'s repeat winners only', () => {
     const sheet = factSheet(awards, leaderboard);
-    expect(sheet).toContain('Season so far (Weeks 1–5, 5 weeks counted)');
+    expect(sheet).toContain('Season so far (Weeks 1–5)');
     expect(sheet).toContain('Jurong FC has now won The Corpse 3 times this season');
     // Bravo's Juggernaut this week is its first, so it isn't a repeat.
     expect(sheet).not.toContain('Bravo has now won');

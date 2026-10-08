@@ -4,7 +4,7 @@
  * into WhatsApp.
  */
 import type { WeekAwards } from './awards.js';
-import { SEASON_AWARD_KEYS, SEASON_AWARD_NAMES, type SeasonAwardKey, type SeasonLeaderboard } from './leaderboard.js';
+import { describeWeeks, SEASON_AWARD_KEYS, SEASON_AWARD_NAMES, type SeasonAwardKey, type SeasonLeaderboard } from './leaderboard.js';
 
 const n = (x: number) => x.toFixed(1);
 
@@ -24,10 +24,7 @@ const AWARD_EMOJI: Record<SeasonAwardKey, string> = {
 const DIVIDER = '━━━━━━━━━━━━━━━━━━━━━━';
 
 export function formatLeaderboard(lb: SeasonLeaderboard): string[] {
-  const first = lb.weeks[0]!;
-  const last = lb.weeks[lb.weeks.length - 1]!;
-  const range = first === last ? `Wk ${first}` : `Wks ${first}–${last}`;
-  const lines = [DIVIDER, `📊 SEASON LEADERBOARD (${range})`, DIVIDER];
+  const lines = [DIVIDER, `📊 SEASON LEADERBOARD (${describeWeeks(lb.weeks)})`, DIVIDER];
   for (const key of SEASON_AWARD_KEYS) {
     const leader = lb.leaders[key];
     if (!leader) continue;

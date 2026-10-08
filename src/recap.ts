@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { computeAwards } from './awards.js';
-import { fetchWeek, fetchWeeks } from './espn.js';
+import { leagueFetcher } from './espn.js';
 import { buildLeaderboard, type SeasonLeaderboard } from './leaderboard.js';
 import { generateRoast } from './roast.js';
 import { formatEmailBody, formatSubject } from './format.js';
@@ -91,8 +91,8 @@ async function runLeagueRecap(
     }
 
     console.log(`[${league.id}] Building the Week ${week} recap...`);
-    const espnConfig = resolveEspnConfig(league, secrets);
-    const { matchups } = await fetchWeek(espnConfig, week);
+    const espn = leagueFetcher(resolveEspnConfig(league, secrets));
+    const { matchups } = await espn.week(week);
     if (matchups.length === 0) {
       throw new Error(`No matchups returned for Week ${week} — check the league ID, season, and cookies.`);
     }
@@ -111,10 +111,11 @@ async function runLeagueRecap(
 
     let leaderboard: SeasonLeaderboard | undefined;
     let leaderboardError: Error | undefined;
-    if (week > 1) {
+    // Only regular-season weeks are tallied: after Week 14, ESPN's matchup and scoring periods differ.
+    if (week > 1 && isInSeason(week)) {
       try {
         const pastWeeks = Array.from({ length: week - 1 }, (_, i) => i + 1);
-        const past = await fetchWeeks(espnConfig, pastWeeks);
+        const past = await espn.weeks(pastWeeks);
         leaderboard = buildLeaderboard([...past, { week, matchups }]);
       } catch (err) {
         leaderboardError = err instanceof Error ? err : new Error(String(err));
@@ -199,6 +200,7 @@ async function main(): Promise<void> {
         })),
     ];
 
+    // Send every alert even if one fails, so a Resend hiccup can't hide another league's problem.
     const alerts = await Promise.allSettled(alertJobs.map((job) => job.send()));
     alerts.forEach((a, i) => {
       if (a.status === 'rejected') {
@@ -211,6 +213,7 @@ async function main(): Promise<void> {
   process.exitCode = exitCode;
 }
 
+// Only run when executed directly (`tsx src/recap.ts`), not when imported by tests.
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((err) => {
     console.error('Recap failed:', err instanceof Error ? err.message : err);

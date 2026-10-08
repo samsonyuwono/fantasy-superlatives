@@ -120,15 +120,46 @@ async function fetchWeekWith(
   return { matchups };
 }
 
-/** Fetch and normalize several weeks of the league, sharing one client and one lineup-settings lookup. */
-export async function fetchWeeks(cfg: EspnConfig, weeks: number[]): Promise<(WeekData & { week: number })[]> {
-  const client = makeClient(cfg);
-  const lineupSlots = fetchLineupSlots(client, cfg);
-  return Promise.all(weeks.map(async (week) => ({ week, ...(await fetchWeekWith(client, cfg, week, lineupSlots)) })));
+/** How many weeks to fetch from ESPN at once, so a late-season tally isn't one big burst of requests. */
+const WEEKS_AT_ONCE = 3;
+const RETRY_DELAY_MS = 1000;
+
+/** Run `fn`, and if it fails, wait and try once more. */
+export async function withRetry<T>(fn: () => Promise<T>, retryDelayMs = RETRY_DELAY_MS): Promise<T> {
+  try {
+    return await fn();
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    return fn();
+  }
 }
 
-/** Fetch and normalize a single week of the league. */
-export async function fetchWeek(cfg: EspnConfig, week: number): Promise<WeekData> {
-  const [data] = await fetchWeeks(cfg, [week]);
-  return { matchups: data!.matchups };
+/** Map over `items` with at most `size` calls running at a time, keeping the input order. */
+export async function mapInBatches<T, R>(items: T[], size: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = [];
+  for (let i = 0; i < items.length; i += size) {
+    results.push(...(await Promise.all(items.slice(i, i + size).map(fn))));
+  }
+  return results;
+}
+
+export interface LeagueFetcher {
+  /** Fetch and normalize one week. */
+  week(week: number): Promise<WeekData>;
+  /** Fetch several weeks, a few at a time, retrying each once. Throws if any week still fails. */
+  weeks(weeks: number[]): Promise<(WeekData & { week: number })[]>;
+}
+
+/** One ESPN client and one lineup-settings lookup, shared by every week fetched for a league. */
+export function leagueFetcher(cfg: EspnConfig): LeagueFetcher {
+  const client = makeClient(cfg);
+  const lineupSlots = fetchLineupSlots(client, cfg);
+  return {
+    week: (week) => fetchWeekWith(client, cfg, week, lineupSlots),
+    weeks: (weeks) =>
+      mapInBatches(weeks, WEEKS_AT_ONCE, async (week) => ({
+        week,
+        ...(await withRetry(() => fetchWeekWith(client, cfg, week, lineupSlots))),
+      })),
+  };
 }

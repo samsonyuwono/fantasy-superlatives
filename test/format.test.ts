@@ -49,7 +49,7 @@ describe('formatLeaderboard', () => {
   const lines = formatLeaderboard(leaderboard);
 
   it('titles the section with the weeks covered', () => {
-    expect(lines).toContain('📊 SEASON LEADERBOARD (Wks 1–5)');
+    expect(lines).toContain('📊 SEASON LEADERBOARD (Weeks 1–5)');
   });
 
   it('lists each award leader with their count, joining ties', () => {

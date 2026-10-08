@@ -28,11 +28,6 @@ export interface NormalizedMatchup {
   away: NormalizedTeam;
 }
 
-/**
- * Season tallies count awards by `teamId`, not name, because managers rename their teams
- * mid-season. It's optional only where an award can be an empty placeholder (no Bonehead
- * swap, no decided matchups).
- */
 /** How a team's score would have done against every other team this week. */
 export interface AllPlayRecord {
   beaten: number;
@@ -41,6 +36,11 @@ export interface AllPlayRecord {
   opponents: number;
 }
 
+/**
+ * Season tallies count awards by `teamId`, not name, because managers rename their teams
+ * mid-season. It's optional only where an award can be an empty placeholder (no Bonehead
+ * swap, no decided matchups).
+ */
 export interface WeekAwards {
   week: number;
   juggernaut: { team: string; teamId: number; score: number };
