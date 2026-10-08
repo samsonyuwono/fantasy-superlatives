@@ -20,6 +20,7 @@ export interface NormalizedTeam {
   /** Actual points scored (from ESPN). */
   score: number;
   players: NormalizedPlayer[];
+  lineupSlots?: string[];
 }
 
 export interface NormalizedMatchup {
@@ -57,12 +58,13 @@ const allTeams = (matchups: NormalizedMatchup[]): NormalizedTeam[] =>
   matchups.flatMap((m) => [m.home, m.away]);
 
 /**
- * Maximum total points achievable from a team's roster, filling exactly the slots the
- * manager actually started, using each player at most once and only in an eligible slot.
+ * Maximum total points achievable from a team's roster, filling the league's lineup slots
+ * (or, if unknown, the slots the manager actually started), using each player at most once
+ * and only in an eligible slot.
  * Exact solution via memoized assignment (rosters are small, so this is cheap).
  */
 export function optimalLineupPoints(team: NormalizedTeam): number {
-  const slots = startersOf(team).map((s) => s.slot);
+  const slots = team.lineupSlots ?? startersOf(team).map((s) => s.slot);
   // Pool of candidates: everyone who could have been started (starters + bench, never IR).
   const pool = team.players.filter((pl) => pl.slot !== IR);
   const memo = new Map<string, number>();

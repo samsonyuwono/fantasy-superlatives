@@ -188,3 +188,27 @@ describe('optimalLineupPoints with two FLEX slots', () => {
     expect(awards.sleepwalker.pointsLeft).toBeCloseTo(27, 5);
   });
 });
+
+describe('optimalLineupPoints with league lineup slots (empty starting slot)', () => {
+  const emptySlotTeam: NormalizedTeam = {
+    teamId: 11,
+    name: 'Forgetful',
+    score: 15,
+    lineupSlots: ['QB', 'RB/WR/TE', 'RB/WR/TE'],
+    players: [
+      p('Only QB', 10, 'QB', ['QB']),
+      p('Started RB', 5, 'RB/WR/TE', ['RB', 'RB/WR/TE']),
+      p('Bench WR', 12, 'Bench', ['WR', 'RB/WR/TE']),
+    ],
+  };
+
+  it('counts the empty slot as fillable from the bench', () => {
+    // QB 10 + both FLEX spots (12 + 5) = 27, not just 22 from the slots that were used.
+    expect(optimalLineupPoints(emptySlotTeam)).toBeCloseTo(27, 5);
+  });
+
+  it('falls back to the started slots when the league lineup is unknown', () => {
+    const { lineupSlots: _ignored, ...withoutSlots } = emptySlotTeam;
+    expect(optimalLineupPoints(withoutSlots)).toBeCloseTo(22, 5);
+  });
+});
