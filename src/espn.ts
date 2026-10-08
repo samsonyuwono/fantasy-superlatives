@@ -32,6 +32,7 @@ export interface WeekData {
   matchups: NormalizedMatchup[];
 }
 
+/** A team's display name with whitespace tidied, falling back to its abbreviation, then "Team <id>". */
 export function teamName(team: any): string {
   const name = typeof team?.name === 'string' ? team.name.replace(/\s+/g, ' ').trim() : '';
   return name || team?.abbreviation || `Team ${team?.id ?? '?'}`;
@@ -98,11 +99,12 @@ async function fetchWeekWith(
   cfg: EspnConfig,
   week: number,
   lineupSlotsPromise: Promise<string[] | undefined>,
+  withNames: boolean,
 ): Promise<WeekData> {
   const [boxscores, teams, lineupSlots] = await Promise.all([
     // For Weeks 1–14 the matchup period and scoring period both equal the NFL week.
     client.getBoxscoreForWeek({ seasonId: cfg.seasonYear, matchupPeriodId: week, scoringPeriodId: week }),
-    client.getTeamsAtWeek({ seasonId: cfg.seasonYear, scoringPeriodId: week }),
+    withNames ? client.getTeamsAtWeek({ seasonId: cfg.seasonYear, scoringPeriodId: week }) : [],
     lineupSlotsPromise,
   ]);
 
@@ -120,8 +122,11 @@ async function fetchWeekWith(
   return { matchups };
 }
 
-/** How many weeks to fetch from ESPN at once, so a late-season tally isn't one big burst of requests. */
-const WEEKS_AT_ONCE = 3;
+/**
+ * How many earlier weeks to fetch from ESPN at once, so a late-season tally isn't one big burst
+ * of requests. Each one is a single request, since earlier weeks skip the team names.
+ */
+const WEEKS_AT_ONCE = 6;
 const RETRY_DELAY_MS = 1000;
 
 /** Run `fn`, and if it fails, wait and try once more. */
@@ -144,10 +149,14 @@ export async function mapInBatches<T, R>(items: T[], size: number, fn: (item: T)
 }
 
 export interface LeagueFetcher {
-  /** Fetch and normalize one week. */
+  /** Fetch and normalize one week, with team names. */
   week(week: number): Promise<WeekData>;
-  /** Fetch several weeks, a few at a time, retrying each once. Throws if any week still fails. */
-  weeks(weeks: number[]): Promise<(WeekData & { week: number })[]>;
+  /**
+   * Fetch earlier weeks for the season tally, a few at a time, retrying each once. Throws if any
+   * week still fails. Team names are left as "Team <id>" to save a request per week: the tally
+   * counts by teamId and takes names from the latest week, which is fetched with `week`.
+   */
+  earlierWeeks(weeks: number[]): Promise<(WeekData & { week: number })[]>;
 }
 
 /** One ESPN client and one lineup-settings lookup, shared by every week fetched for a league. */
@@ -155,11 +164,11 @@ export function leagueFetcher(cfg: EspnConfig): LeagueFetcher {
   const client = makeClient(cfg);
   const lineupSlots = fetchLineupSlots(client, cfg);
   return {
-    week: (week) => fetchWeekWith(client, cfg, week, lineupSlots),
-    weeks: (weeks) =>
+    week: (week) => fetchWeekWith(client, cfg, week, lineupSlots, true),
+    earlierWeeks: (weeks) =>
       mapInBatches(weeks, WEEKS_AT_ONCE, async (week) => ({
         week,
-        ...(await withRetry(() => fetchWeekWith(client, cfg, week, lineupSlots))),
+        ...(await withRetry(() => fetchWeekWith(client, cfg, week, lineupSlots, false))),
       })),
   };
 }

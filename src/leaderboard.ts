@@ -54,7 +54,7 @@ export interface SeasonLeaderboard {
   leaders: Record<SeasonAwardKey, { teams: string[]; count: number } | null>;
   /** Wins of each award by teamId. */
   counts: Record<SeasonAwardKey, Map<number, number>>;
-  /** Each team's name as of the latest week it appears in. */
+  /** Each team's name as of the latest week it appears in. Earlier weeks are fetched without names. */
   nameById: Map<number, string>;
 }
 

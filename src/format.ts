@@ -8,6 +8,7 @@ import { describeWeeks, SEASON_AWARD_KEYS, SEASON_AWARD_NAMES, type SeasonAwardK
 
 const n = (x: number) => x.toFixed(1);
 
+/** The email subject, with the league name so several leagues' recaps are easy to tell apart. */
 export function formatSubject(week: number, leagueName: string): string {
   return `🏈 ${leagueName} — Week ${week} Superlatives`;
 }
@@ -23,6 +24,7 @@ const AWARD_EMOJI: Record<SeasonAwardKey, string> = {
 
 const DIVIDER = '━━━━━━━━━━━━━━━━━━━━━━';
 
+/** The season leaderboard section: one line per award that has a leader, with ties listed together. */
 export function formatLeaderboard(lb: SeasonLeaderboard): string[] {
   const lines = [DIVIDER, `📊 SEASON LEADERBOARD (${describeWeeks(lb.weeks)})`, DIVIDER];
   for (const key of SEASON_AWARD_KEYS) {
@@ -33,6 +35,7 @@ export function formatLeaderboard(lb: SeasonLeaderboard): string[] {
   return lines;
 }
 
+/** The full email: the roast, this week's awards, then the season leaderboard when there is one. */
 export function formatEmailBody(awards: WeekAwards, roast: string, leaderboard?: SeasonLeaderboard): string {
   const a = awards;
   const lines: string[] = [];

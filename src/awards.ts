@@ -233,6 +233,7 @@ function computeLuck(
   return { backedIntoIt, robbed };
 }
 
+/** Compute all seven awards for one week from its normalized matchups. */
 export function computeAwards(matchups: NormalizedMatchup[], week: number): WeekAwards {
   const teams = allTeams(matchups);
   const { backedIntoIt, robbed } = computeLuck(matchups, teams);

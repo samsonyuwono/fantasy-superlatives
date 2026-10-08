@@ -114,9 +114,9 @@ async function runLeagueRecap(
     // Only regular-season weeks are tallied: after Week 14, ESPN's matchup and scoring periods differ.
     if (week > 1 && isInSeason(week)) {
       try {
-        const pastWeeks = Array.from({ length: week - 1 }, (_, i) => i + 1);
-        const past = await espn.weeks(pastWeeks);
-        leaderboard = buildLeaderboard([...past, { week, matchups }]);
+        const earlierWeekNumbers = Array.from({ length: week - 1 }, (_, i) => i + 1);
+        const earlierWeeks = await espn.earlierWeeks(earlierWeekNumbers);
+        leaderboard = buildLeaderboard([...earlierWeeks, { week, matchups }]);
       } catch (err) {
         leaderboardError = err instanceof Error ? err : new Error(String(err));
         console.warn(`[${league.id}] Sending without the season leaderboard:`, leaderboardError.message);

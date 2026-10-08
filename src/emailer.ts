@@ -53,6 +53,7 @@ export async function sendFailureAlert(opts: {
   }
 }
 
+/** Tell the owner a league's recap went out without its season leaderboard. Throws if Resend reports an error. */
 export async function sendLeaderboardSkippedAlert(opts: {
   apiKey: string;
   from: string;

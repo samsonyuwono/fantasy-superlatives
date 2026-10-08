@@ -1,5 +1,25 @@
-import { describe, it, expect } from 'vitest';
-import { teamName, shouldSetCookies, lineupSlotsFromCounts, mapInBatches, withRetry } from '../src/espn.js';
+import { describe, it, expect, vi } from 'vitest';
+import { teamName, shouldSetCookies, lineupSlotsFromCounts, mapInBatches, withRetry, leagueFetcher } from '../src/espn.js';
+
+const calls = vi.hoisted(() => ({ boxscores: [] as number[], teams: [] as number[] }));
+vi.mock('espn-fantasy-football-api/node', () => ({
+  default: {
+    Client: class {
+      setCookies() {}
+      async getLeagueInfo() {
+        return { rosterSettings: { lineupPositionCount: { QB: 1 } } };
+      }
+      async getTeamsAtWeek({ scoringPeriodId }: { scoringPeriodId: number }) {
+        calls.teams.push(scoringPeriodId);
+        return [{ id: 1, name: 'Alpha' }, { id: 2, name: 'Bravo' }];
+      }
+      async getBoxscoreForWeek({ scoringPeriodId }: { scoringPeriodId: number }) {
+        calls.boxscores.push(scoringPeriodId);
+        return [{ homeTeamId: 1, awayTeamId: 2, homeScore: 10, awayScore: 20, homeRoster: [], awayRoster: [] }];
+      }
+    },
+  },
+}));
 
 describe('teamName', () => {
   it('collapses internal runs of whitespace to a single space', () => {
@@ -91,5 +111,23 @@ describe('mapInBatches', () => {
     });
     expect(result).toEqual([10, 20, 30, 40, 50, 60, 70]);
     expect(maxRunning).toBe(3);
+  });
+});
+
+describe('leagueFetcher', () => {
+  it('fetches team names for this week but not for earlier weeks', async () => {
+    calls.boxscores.length = 0;
+    calls.teams.length = 0;
+    const espn = leagueFetcher({ leagueId: 1, seasonYear: 2026 });
+
+    const current = await espn.week(4);
+    const earlier = await espn.earlierWeeks([1, 2, 3]);
+
+    expect(calls.boxscores.sort()).toEqual([1, 2, 3, 4]);
+    expect(calls.teams).toEqual([4]);
+    expect(current.matchups[0]!.home.name).toBe('Alpha');
+    expect(earlier.map((w) => w.week)).toEqual([1, 2, 3]);
+    expect(earlier[0]!.matchups[0]!.home.name).toBe('Team 1');
+    expect(earlier[0]!.matchups[0]!.home.lineupSlots).toEqual(['QB']);
   });
 });
