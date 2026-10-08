@@ -1,8 +1,10 @@
 /**
  * Builds the plain-text email body: the AI roast up top, then a clean stat block of the
- * awards. Plain text so it pastes straight into WhatsApp.
+ * awards, then the season leaderboard when there is one. Plain text so it pastes straight
+ * into WhatsApp.
  */
 import type { WeekAwards } from './awards.js';
+import { SEASON_AWARD_KEYS, SEASON_AWARD_NAMES, type SeasonAwardKey, type SeasonLeaderboard } from './leaderboard.js';
 
 const n = (x: number) => x.toFixed(1);
 
@@ -10,15 +12,39 @@ export function formatSubject(week: number, leagueName: string): string {
   return `🏈 ${leagueName} — Week ${week} Superlatives`;
 }
 
-export function formatEmailBody(awards: WeekAwards, roast: string): string {
+const AWARD_EMOJI: Record<SeasonAwardKey, string> = {
+  juggernaut: '💪',
+  corpse: '💀',
+  sleepwalker: '😴',
+  bonehead: '🤡',
+  backedIntoIt: '🍀',
+  robbed: '😤',
+};
+
+const DIVIDER = '━━━━━━━━━━━━━━━━━━━━━━';
+
+export function formatLeaderboard(lb: SeasonLeaderboard): string[] {
+  const first = lb.weeks[0]!;
+  const last = lb.weeks[lb.weeks.length - 1]!;
+  const range = first === last ? `Wk ${first}` : `Wks ${first}–${last}`;
+  const lines = [DIVIDER, `📊 SEASON LEADERBOARD (${range})`, DIVIDER];
+  for (const key of SEASON_AWARD_KEYS) {
+    const leader = lb.leaders[key];
+    if (!leader) continue;
+    lines.push(`${AWARD_EMOJI[key]} ${SEASON_AWARD_NAMES[key]} — ${leader.teams.join(', ')} ×${leader.count}`);
+  }
+  return lines;
+}
+
+export function formatEmailBody(awards: WeekAwards, roast: string, leaderboard?: SeasonLeaderboard): string {
   const a = awards;
   const lines: string[] = [];
 
   lines.push(roast.trim());
   lines.push('');
-  lines.push('━━━━━━━━━━━━━━━━━━━━━━');
+  lines.push(DIVIDER);
   lines.push(`🏆 WEEK ${a.week} AWARDS`);
-  lines.push('━━━━━━━━━━━━━━━━━━━━━━');
+  lines.push(DIVIDER);
   lines.push(`💪 The Juggernaut — ${a.juggernaut.team} (${n(a.juggernaut.score)})`);
   lines.push(`💀 The Corpse — ${a.corpse.team} (${n(a.corpse.score)})`);
   lines.push(`⭐ Baller of the Week — ${a.ballerOfTheWeek.player}, ${a.ballerOfTheWeek.team} (${n(a.ballerOfTheWeek.points)})`);
@@ -28,6 +54,11 @@ export function formatEmailBody(awards: WeekAwards, roast: string): string {
   );
   lines.push(`🍀 Backed Into It — ${a.backedIntoIt.team} won with ${n(a.backedIntoIt.score)}`);
   lines.push(`😤 Robbed — ${a.robbed.team} lost with ${n(a.robbed.score)}`);
+
+  if (leaderboard) {
+    lines.push('');
+    lines.push(...formatLeaderboard(leaderboard));
+  }
 
   return lines.join('\n');
 }

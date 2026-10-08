@@ -17,6 +17,9 @@ configured league, computes a set of custom awards, has **Claude** write a short
 | 🍀 **Backed Into It** | Luckiest win (won the matchup, but would've beaten the fewest teams) |
 | 😤 **Robbed** | Unluckiest loss (lost the matchup, but would've beaten the most teams) |
 
+Below the weekly awards, a **season leaderboard** shows which team has won each award most often so far
+(Baller of the Week is left out, since it's about one player). The roast can call back to it ("third Corpse this season").
+
 ## How it works
 
 ```
@@ -27,6 +30,7 @@ leagues.json ─► for each league: ESPN box scores ─► awards.ts ─► Cla
 - `src/config.ts`: loads `leagues.json` and matches each league with its cookies in `LEAGUE_SECRETS_JSON`.
 - `src/espn.ts`: fetches and normalizes one week from ESPN, including each league's own lineup slots.
 - `src/awards.ts`: pure, unit-tested award logic (no network).
+- `src/leaderboard.ts`: tallies the awards over Weeks 1..N, which are fetched again on each run since nothing is stored. If an earlier week won't load, the recap goes out without it and `OWNER_ALERT_EMAIL` gets a note.
 - `src/roast.ts`: Claude writes the prose from a fixed fact sheet, so it can't invent numbers.
 - `src/format.ts` / `src/emailer.ts`: build the plain-text body and send it via Resend.
 - `src/week.ts`: works out the week from each league's `seasonWeek1Tuesday` and enforces the Weeks 1–14 gate.

@@ -14,10 +14,11 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { computeAwards } from './awards.js';
-import { fetchWeek } from './espn.js';
+import { fetchWeek, fetchWeeks } from './espn.js';
+import { buildLeaderboard, type SeasonLeaderboard } from './leaderboard.js';
 import { generateRoast } from './roast.js';
 import { formatEmailBody, formatSubject } from './format.js';
-import { sendRecap, sendFailureAlert } from './emailer.js';
+import { sendRecap, sendFailureAlert, sendLeaderboardSkippedAlert } from './emailer.js';
 import { completedWeek, isInSeason } from './week.js';
 import { parseLeaguesJson, parseLeagueSecretsJson, resolveEspnConfig, type LeagueConfig, type LeagueSecrets } from './config.js';
 
@@ -41,6 +42,7 @@ export interface RecapResult {
   leagueId: string;
   status: 'sent' | 'skipped' | 'failed';
   error?: Error;
+  leaderboardError?: Error;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -107,13 +109,27 @@ async function runLeagueRecap(
 
     const awards = computeAwards(matchups, week);
 
-    const roast = await generateRoast(awards, {
-      apiKey: shared.anthropicApiKey,
-      model: shared.anthropicModel,
-    });
+    let leaderboard: SeasonLeaderboard | undefined;
+    let leaderboardError: Error | undefined;
+    if (week > 1) {
+      try {
+        const pastWeeks = Array.from({ length: week - 1 }, (_, i) => i + 1);
+        const past = await fetchWeeks(espnConfig, pastWeeks);
+        leaderboard = buildLeaderboard([...past, { week, matchups }]);
+      } catch (err) {
+        leaderboardError = err instanceof Error ? err : new Error(String(err));
+        console.warn(`[${league.id}] Sending without the season leaderboard:`, leaderboardError.message);
+      }
+    }
+
+    const roast = await generateRoast(
+      awards,
+      { apiKey: shared.anthropicApiKey, model: shared.anthropicModel },
+      leaderboard,
+    );
 
     const subject = formatSubject(week, league.displayName);
-    const body = formatEmailBody(awards, roast);
+    const body = formatEmailBody(awards, roast, leaderboard);
 
     if (args.dryRun) {
       console.log(`\n--- DRY RUN: ${league.displayName} (not sending) ---`);
@@ -130,7 +146,7 @@ async function runLeagueRecap(
       text: body,
     });
     console.log(`[${league.id}] Sent the Week ${week} recap to ${league.recipientEmails.join(', ')}.`);
-    return { leagueId: league.id, status: 'sent' };
+    return { leagueId: league.id, status: 'sent', leaderboardError };
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err));
     console.error(`[${league.id}] Recap failed:`, error.message);
@@ -169,22 +185,24 @@ async function main(): Promise<void> {
       ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
       : undefined;
 
-    // Send every alert even if one fails, so a Resend hiccup can't hide another league's failure.
-    const alerts = await Promise.allSettled(
-      failed.map((r) =>
-        sendFailureAlert({
-          apiKey: shared.resendApiKey,
-          from: shared.emailFrom,
-          ownerEmail: shared.ownerAlertEmail,
+    const alertBase = { apiKey: shared.resendApiKey, from: shared.emailFrom, ownerEmail: shared.ownerAlertEmail, runUrl };
+    const alertJobs = [
+      ...failed.map((r) => ({
+        leagueId: r.leagueId,
+        send: () => sendFailureAlert({ ...alertBase, leagueId: r.leagueId, error: r.error! }),
+      })),
+      ...results
+        .filter((r) => r.leaderboardError)
+        .map((r) => ({
           leagueId: r.leagueId,
-          error: r.error!,
-          runUrl,
-        }),
-      ),
-    );
+          send: () => sendLeaderboardSkippedAlert({ ...alertBase, leagueId: r.leagueId, error: r.leaderboardError! }),
+        })),
+    ];
+
+    const alerts = await Promise.allSettled(alertJobs.map((job) => job.send()));
     alerts.forEach((a, i) => {
       if (a.status === 'rejected') {
-        console.error(`[${failed[i]!.leagueId}] Failure alert did not send:`, a.reason);
+        console.error(`[${alertJobs[i]!.leagueId}] Alert did not send:`, a.reason);
       }
     });
   }
@@ -193,7 +211,6 @@ async function main(): Promise<void> {
   process.exitCode = exitCode;
 }
 
-// Only run when executed directly (`tsx src/recap.ts`), not when imported by tests.
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((err) => {
     console.error('Recap failed:', err instanceof Error ? err.message : err);

@@ -73,25 +73,38 @@ function normalizeTeam(
   };
 }
 
-/** Fetch and normalize a single week of the league. */
-export async function fetchWeek(cfg: EspnConfig, week: number): Promise<WeekData> {
+function makeClient(cfg: EspnConfig): EspnClient {
   const client = new Client({ leagueId: cfg.leagueId });
   if (shouldSetCookies(cfg)) {
     client.setCookies({ espnS2: cfg.espnS2!, SWID: cfg.swid! });
   }
+  return client;
+}
 
-  const [boxscores, teams, league] = await Promise.all([
+/**
+ * Lineup settings let awards count slots a manager left empty. Not essential: without
+ * them the awards fall back to the slots each manager actually started.
+ */
+async function fetchLineupSlots(client: EspnClient, cfg: EspnConfig): Promise<string[] | undefined> {
+  const league = await client.getLeagueInfo({ seasonId: cfg.seasonYear }).catch((err: unknown) => {
+    console.warn(`Could not load league lineup settings; using started slots instead. (${String(err)})`);
+    return undefined;
+  });
+  return lineupSlotsFromCounts(league?.rosterSettings?.lineupPositionCount);
+}
+
+async function fetchWeekWith(
+  client: EspnClient,
+  cfg: EspnConfig,
+  week: number,
+  lineupSlotsPromise: Promise<string[] | undefined>,
+): Promise<WeekData> {
+  const [boxscores, teams, lineupSlots] = await Promise.all([
     // For Weeks 1–14 the matchup period and scoring period both equal the NFL week.
     client.getBoxscoreForWeek({ seasonId: cfg.seasonYear, matchupPeriodId: week, scoringPeriodId: week }),
     client.getTeamsAtWeek({ seasonId: cfg.seasonYear, scoringPeriodId: week }),
-    // Lineup settings let awards count slots a manager left empty. Not essential: without
-    // them the awards fall back to the slots each manager actually started.
-    client.getLeagueInfo({ seasonId: cfg.seasonYear }).catch((err: unknown) => {
-      console.warn(`Could not load league lineup settings; using started slots instead. (${String(err)})`);
-      return undefined;
-    }),
+    lineupSlotsPromise,
   ]);
-  const lineupSlots = lineupSlotsFromCounts(league?.rosterSettings?.lineupPositionCount);
 
   const nameById = new Map<number, string>();
   for (const t of teams) nameById.set(t.id, teamName(t));
@@ -105,4 +118,17 @@ export async function fetchWeek(cfg: EspnConfig, week: number): Promise<WeekData
     }));
 
   return { matchups };
+}
+
+/** Fetch and normalize several weeks of the league, sharing one client and one lineup-settings lookup. */
+export async function fetchWeeks(cfg: EspnConfig, weeks: number[]): Promise<(WeekData & { week: number })[]> {
+  const client = makeClient(cfg);
+  const lineupSlots = fetchLineupSlots(client, cfg);
+  return Promise.all(weeks.map(async (week) => ({ week, ...(await fetchWeekWith(client, cfg, week, lineupSlots)) })));
+}
+
+/** Fetch and normalize a single week of the league. */
+export async function fetchWeek(cfg: EspnConfig, week: number): Promise<WeekData> {
+  const [data] = await fetchWeeks(cfg, [week]);
+  return { matchups: data!.matchups };
 }
