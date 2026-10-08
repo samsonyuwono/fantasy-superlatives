@@ -52,7 +52,7 @@ cp .env.example .env
   `EMAIL_FROM=onboarding@resend.dev` and set `RECIPIENT_EMAIL` to the address you signed up with.
 - **`ANTHROPIC_API_KEY`** — your personal key from
   [console.anthropic.com](https://console.anthropic.com). `ANTHROPIC_MODEL` defaults to
-  `claude-sonnet-5`.
+  `claude-sonnet-5-5`.
 
 ### 3. Test locally
 
@@ -84,7 +84,7 @@ gh secret set LEAGUE_ID             --body "123456"
 gh secret set SEASON_YEAR           --body "2026"
 gh secret set SEASON_WEEK1_TUESDAY  --body "2026-09-15"
 gh secret set ANTHROPIC_API_KEY     --body "sk-ant-..."
-gh secret set ANTHROPIC_MODEL       --body "claude-sonnet-5"
+gh secret set ANTHROPIC_MODEL       --body "claude-sonnet-5-5"
 gh secret set RESEND_API_KEY        --body "re_..."
 gh secret set EMAIL_FROM            --body "onboarding@resend.dev"
 gh secret set RECIPIENT_EMAIL       --body "you@example.com"

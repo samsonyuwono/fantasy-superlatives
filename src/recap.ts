@@ -66,7 +66,7 @@ function required(name: string): string {
 function loadSharedConfig(): SharedConfig {
   return {
     anthropicApiKey: required('ANTHROPIC_API_KEY'),
-    anthropicModel: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5',
+    anthropicModel: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5',
     resendApiKey: required('RESEND_API_KEY'),
     emailFrom: process.env.EMAIL_FROM || 'onboarding@resend.dev',
     ownerAlertEmail: required('OWNER_ALERT_EMAIL'),
@@ -169,16 +169,24 @@ async function main(): Promise<void> {
       ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
       : undefined;
 
-    for (const r of failed) {
-      await sendFailureAlert({
-        apiKey: shared.resendApiKey,
-        from: shared.emailFrom,
-        ownerEmail: shared.ownerAlertEmail,
-        leagueId: r.leagueId,
-        error: r.error!,
-        runUrl,
-      });
-    }
+    // Send every alert even if one fails, so a Resend hiccup can't hide another league's failure.
+    const alerts = await Promise.allSettled(
+      failed.map((r) =>
+        sendFailureAlert({
+          apiKey: shared.resendApiKey,
+          from: shared.emailFrom,
+          ownerEmail: shared.ownerAlertEmail,
+          leagueId: r.leagueId,
+          error: r.error!,
+          runUrl,
+        }),
+      ),
+    );
+    alerts.forEach((a, i) => {
+      if (a.status === 'rejected') {
+        console.error(`[${failed[i]!.leagueId}] Failure alert did not send:`, a.reason);
+      }
+    });
   }
 
   console.log(`Done: ${results.length - failed.length}/${results.length} leagues succeeded.`);

@@ -40,10 +40,17 @@ export async function generateRoast(awards: WeekAwards, opts: RoastOptions): Pro
   const client = new Anthropic({ apiKey: opts.apiKey });
   const message = await client.messages.create({
     model: opts.model,
-    max_tokens: 1024,
+    // Thinking tokens count against max_tokens, so leave headroom beyond the ~250-word roast.
+    max_tokens: 4096,
+    // A short roast doesn't need deep reasoning; low effort is faster and cheaper.
+    output_config: { effort: 'low' },
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: factSheet(awards) }],
   });
+
+  if (message.stop_reason === 'max_tokens' || message.stop_reason === 'refusal') {
+    throw new Error(`Claude did not finish the roast (stop_reason: ${message.stop_reason}).`);
+  }
 
   const text = message.content
     .filter((block): block is Anthropic.TextBlock => block.type === 'text')
