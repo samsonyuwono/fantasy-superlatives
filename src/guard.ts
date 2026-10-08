@@ -7,7 +7,7 @@
  * 9am run already exists — whatever its result, since recap.ts may have sent some leagues
  * before another failed (and that failure was already alerted).
  *
- * Usage (in the workflow's guard job):
+ * Usage (the guard step of the workflow's recap job):
  *   tsx src/guard.ts   # reads GITHUB_EVENT_NAME, writes skip=true|false to $GITHUB_OUTPUT
  */
 import { execFileSync } from 'node:child_process';

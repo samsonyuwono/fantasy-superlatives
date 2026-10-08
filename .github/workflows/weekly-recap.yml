@@ -5,7 +5,7 @@ run-name: ${{ inputs.source == 'external-9am' && 'Weekly recap (9am trigger)' ||
 on:
   # The on-time 9am ET send comes from cron-job.org calling this workflow's dispatch API
   # (with source=external-9am) — GitHub's own scheduler routinely starts runs 4–6 hours late.
-  # This schedule is only a fallback in case that external trigger didn't fire; the guard job
+  # This schedule is only a fallback in case that external trigger didn't fire; the guard step
   # below skips it when the 9am run already happened. The script itself gates to Weeks 1–14.
   schedule:
     - cron: '0 11 * * 2'
@@ -27,46 +27,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # On the fallback schedule, skip if today's 9am-triggered run already happened (see src/guard.ts).
-  # Manual dispatches always proceed.
-  guard:
+  recap:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       actions: read
-    outputs:
-      skip: ${{ steps.check.outputs.skip }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - run: npm ci
 
-      - id: check
+      # On the fallback schedule, skip if today's 9am-triggered run already happened (see src/guard.ts).
+      # Manual dispatches always proceed.
+      - id: guard
         run: npx tsx src/guard.ts
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
 
-  recap:
-    needs: guard
-    if: needs.guard.outputs.skip != 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - run: npm ci
-
       - name: Send the weekly recap
+        if: steps.guard.outputs.skip != 'true'
         run: |
           if [ -n "${{ inputs.week }}" ]; then
             npx tsx src/recap.ts --week "${{ inputs.week }}"
