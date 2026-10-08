@@ -28,14 +28,28 @@ export interface NormalizedMatchup {
   away: NormalizedTeam;
 }
 
+/** How a team's score would have done against every other team this week. */
+export interface AllPlayRecord {
+  beaten: number;
+  tied: number;
+  /** Number of other teams in the league. */
+  opponents: number;
+}
+
+/**
+ * Season tallies count awards by `teamId`, not name, because managers rename their teams
+ * mid-season. It's optional only where an award can be an empty placeholder (no Bonehead
+ * swap, no decided matchups).
+ */
 export interface WeekAwards {
   week: number;
-  juggernaut: { team: string; score: number };
-  corpse: { team: string; score: number };
+  juggernaut: { team: string; teamId: number; score: number };
+  corpse: { team: string; teamId: number; score: number };
   ballerOfTheWeek: { team: string; player: string; points: number };
-  sleepwalker: { team: string; pointsLeft: number; actual: number; optimal: number };
+  sleepwalker: { team: string; teamId: number; pointsLeft: number; actual: number; optimal: number };
   bonehead: {
     team: string;
+    teamId?: number;
     benched: string;
     benchedPoints: number;
     started: string;
@@ -43,8 +57,8 @@ export interface WeekAwards {
     slot: string;
     regret: number;
   };
-  backedIntoIt: { team: string; score: number; allPlayWinPct: number };
-  robbed: { team: string; score: number; allPlayWinPct: number };
+  backedIntoIt: { team: string; teamId?: number; score: number; allPlayWinPct: number; allPlay: AllPlayRecord };
+  robbed: { team: string; teamId?: number; score: number; allPlayWinPct: number; allPlay: AllPlayRecord };
 }
 
 const BENCH = 'Bench';
@@ -96,50 +110,51 @@ export function optimalLineupPoints(team: NormalizedTeam): number {
 
 function computeJuggernaut(teams: NormalizedTeam[]): WeekAwards['juggernaut'] {
   const top = teams.reduce((a, b) => (b.score > a.score ? b : a));
-  return { team: top.name, score: top.score };
+  return { team: top.name, teamId: top.teamId, score: top.score };
 }
 
 function computeCorpse(teams: NormalizedTeam[]): WeekAwards['corpse'] {
   const bottom = teams.reduce((a, b) => (b.score < a.score ? b : a));
-  return { team: bottom.name, score: bottom.score };
+  return { team: bottom.name, teamId: bottom.teamId, score: bottom.score };
 }
 
 function computeBaller(teams: NormalizedTeam[]): WeekAwards['ballerOfTheWeek'] {
-  let best: WeekAwards['ballerOfTheWeek'] | null = null;
+  let topStarter: WeekAwards['ballerOfTheWeek'] | null = null;
   for (const team of teams) {
     for (const pl of startersOf(team)) {
-      if (!best || pl.points > best.points) {
-        best = { team: team.name, player: pl.name, points: pl.points };
+      if (!topStarter || pl.points > topStarter.points) {
+        topStarter = { team: team.name, player: pl.name, points: pl.points };
       }
     }
   }
-  return best!;
+  return topStarter!;
 }
 
 function computeSleepwalker(teams: NormalizedTeam[]): WeekAwards['sleepwalker'] {
-  let best: WeekAwards['sleepwalker'] | null = null;
+  let mostPointsLeft: WeekAwards['sleepwalker'] | null = null;
   for (const team of teams) {
     const actual = startersOf(team).reduce((sum, pl) => sum + pl.points, 0);
     const optimal = optimalLineupPoints(team);
     const pointsLeft = optimal - actual;
-    if (!best || pointsLeft > best.pointsLeft) {
-      best = { team: team.name, pointsLeft, actual, optimal };
+    if (!mostPointsLeft || pointsLeft > mostPointsLeft.pointsLeft) {
+      mostPointsLeft = { team: team.name, teamId: team.teamId, pointsLeft, actual, optimal };
     }
   }
-  return best!;
+  return mostPointsLeft!;
 }
 
 function computeBonehead(teams: NormalizedTeam[]): WeekAwards['bonehead'] {
-  let best: WeekAwards['bonehead'] | null = null;
+  let worstSwap: WeekAwards['bonehead'] | null = null;
   for (const team of teams) {
     for (const starter of startersOf(team)) {
       for (const benched of benchOf(team)) {
         if (!benched.eligibleSlots.includes(starter.slot)) continue;
         const regret = benched.points - starter.points;
         if (regret <= 0) continue;
-        if (!best || regret > best.regret) {
-          best = {
+        if (!worstSwap || regret > worstSwap.regret) {
+          worstSwap = {
             team: team.name,
+            teamId: team.teamId,
             benched: benched.name,
             benchedPoints: benched.points,
             started: starter.name,
@@ -153,7 +168,7 @@ function computeBonehead(teams: NormalizedTeam[]): WeekAwards['bonehead'] {
   }
   // No legal beneficial swap anywhere: report a null-ish "nobody blundered" result.
   return (
-    best ?? {
+    worstSwap ?? {
       team: '',
       benched: '',
       benchedPoints: 0,
@@ -165,16 +180,18 @@ function computeBonehead(teams: NormalizedTeam[]): WeekAwards['bonehead'] {
   );
 }
 
-/** All-play win % = share of the other teams this team would have beaten head-to-head this week. */
-function allPlayWinPct(team: NormalizedTeam, teams: NormalizedTeam[]): number {
+function allPlayRecord(team: NormalizedTeam, teams: NormalizedTeam[]): AllPlayRecord {
   const others = teams.filter((t) => t.teamId !== team.teamId);
-  if (others.length === 0) return 0;
-  let wins = 0;
-  for (const other of others) {
-    if (team.score > other.score) wins += 1;
-    else if (team.score === other.score) wins += 0.5;
-  }
-  return wins / others.length;
+  return {
+    beaten: others.filter((o) => team.score > o.score).length,
+    tied: others.filter((o) => team.score === o.score).length,
+    opponents: others.length,
+  };
+}
+
+/** All-play win % = share of the other teams this team would have beaten head-to-head this week (ties count half). */
+function allPlayWinPct(r: AllPlayRecord): number {
+  return r.opponents === 0 ? 0 : (r.beaten + r.tied / 2) / r.opponents;
 }
 
 function computeLuck(
@@ -194,15 +211,14 @@ function computeLuck(
     // exact ties contribute no winner/loser
   }
 
-  const withPct = (t: NormalizedTeam) => ({
-    team: t.name,
-    score: t.score,
-    allPlayWinPct: allPlayWinPct(t, teams),
-  });
+  const withPct = (t: NormalizedTeam) => {
+    const allPlay = allPlayRecord(t, teams);
+    return { team: t.name, teamId: t.teamId, score: t.score, allPlayWinPct: allPlayWinPct(allPlay), allPlay };
+  };
 
   // No decided matchups (e.g. every team scored 0 because the week hasn't been played):
   // there is no luck to award, so return placeholders instead of reducing an empty array.
-  const emptyLuck = { team: '', score: 0, allPlayWinPct: 0 };
+  const emptyLuck = { team: '', score: 0, allPlayWinPct: 0, allPlay: { beaten: 0, tied: 0, opponents: 0 } };
 
   // Luckiest win: matchup winner with the LOWEST all-play %.
   const backedIntoIt = winners.length
@@ -217,6 +233,7 @@ function computeLuck(
   return { backedIntoIt, robbed };
 }
 
+/** Compute all seven awards for one week from its normalized matchups. */
 export function computeAwards(matchups: NormalizedMatchup[], week: number): WeekAwards {
   const teams = allTeams(matchups);
   const { backedIntoIt, robbed } = computeLuck(matchups, teams);

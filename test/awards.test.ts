@@ -123,15 +123,26 @@ describe('computeAwards', () => {
   it('Backed Into It is the luckiest win (won the matchup, lowest all-play %)', () => {
     expect(awards.backedIntoIt.team).toBe('Charlie');
     expect(awards.backedIntoIt.allPlayWinPct).toBeCloseTo(1 / 3, 3);
+    expect(awards.backedIntoIt.allPlay).toEqual({ beaten: 1, tied: 0, opponents: 3 });
   });
 
   it('Robbed is the unluckiest loss (lost the matchup, highest all-play %)', () => {
     expect(awards.robbed.team).toBe('Alpha');
     expect(awards.robbed.allPlayWinPct).toBeCloseTo(2 / 3, 3);
+    expect(awards.robbed.allPlay).toEqual({ beaten: 2, tied: 0, opponents: 3 });
   });
 
   it('reports the week number', () => {
     expect(awards.week).toBe(3);
+  });
+
+  it('tags each award with the winning teamId', () => {
+    expect(awards.juggernaut.teamId).toBe(2);
+    expect(awards.corpse.teamId).toBe(4);
+    expect(awards.sleepwalker.teamId).toBe(1);
+    expect(awards.bonehead.teamId).toBe(1);
+    expect(awards.backedIntoIt.teamId).toBe(3);
+    expect(awards.robbed.teamId).toBe(1);
   });
 });
 
@@ -153,6 +164,8 @@ describe('weeks with no decided matchups (e.g. no scores yet)', () => {
     const awards = computeAwards(matchups, 14);
     expect(awards.backedIntoIt.team).toBe('');
     expect(awards.robbed.team).toBe('');
+    expect(awards.backedIntoIt.teamId).toBeUndefined();
+    expect(awards.robbed.teamId).toBeUndefined();
   });
 });
 

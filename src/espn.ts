@@ -32,6 +32,7 @@ export interface WeekData {
   matchups: NormalizedMatchup[];
 }
 
+/** A team's display name with whitespace tidied, falling back to its abbreviation, then "Team <id>". */
 export function teamName(team: any): string {
   const name = typeof team?.name === 'string' ? team.name.replace(/\s+/g, ' ').trim() : '';
   return name || team?.abbreviation || `Team ${team?.id ?? '?'}`;
@@ -73,25 +74,38 @@ function normalizeTeam(
   };
 }
 
-/** Fetch and normalize a single week of the league. */
-export async function fetchWeek(cfg: EspnConfig, week: number): Promise<WeekData> {
+function makeClient(cfg: EspnConfig): EspnClient {
   const client = new Client({ leagueId: cfg.leagueId });
   if (shouldSetCookies(cfg)) {
     client.setCookies({ espnS2: cfg.espnS2!, SWID: cfg.swid! });
   }
+  return client;
+}
 
-  const [boxscores, teams, league] = await Promise.all([
-    // For Weeks 1–14 the matchup period and scoring period both equal the NFL week.
+/**
+ * Lineup settings let awards count slots a manager left empty. Not essential: without
+ * them the awards fall back to the slots each manager actually started.
+ */
+async function fetchLineupSlots(client: EspnClient, cfg: EspnConfig): Promise<string[] | undefined> {
+  const league = await client.getLeagueInfo({ seasonId: cfg.seasonYear }).catch((err: unknown) => {
+    console.warn(`Could not load league lineup settings; using started slots instead. (${String(err)})`);
+    return undefined;
+  });
+  return lineupSlotsFromCounts(league?.rosterSettings?.lineupPositionCount);
+}
+
+async function fetchWeekWith(
+  client: EspnClient,
+  cfg: EspnConfig,
+  week: number,
+  lineupSlotsPromise: Promise<string[] | undefined>,
+  withNames: boolean,
+): Promise<WeekData> {
+  const [boxscores, teams, lineupSlots] = await Promise.all([
     client.getBoxscoreForWeek({ seasonId: cfg.seasonYear, matchupPeriodId: week, scoringPeriodId: week }),
-    client.getTeamsAtWeek({ seasonId: cfg.seasonYear, scoringPeriodId: week }),
-    // Lineup settings let awards count slots a manager left empty. Not essential: without
-    // them the awards fall back to the slots each manager actually started.
-    client.getLeagueInfo({ seasonId: cfg.seasonYear }).catch((err: unknown) => {
-      console.warn(`Could not load league lineup settings; using started slots instead. (${String(err)})`);
-      return undefined;
-    }),
+    withNames ? client.getTeamsAtWeek({ seasonId: cfg.seasonYear, scoringPeriodId: week }) : [],
+    lineupSlotsPromise,
   ]);
-  const lineupSlots = lineupSlotsFromCounts(league?.rosterSettings?.lineupPositionCount);
 
   const nameById = new Map<number, string>();
   for (const t of teams) nameById.set(t.id, teamName(t));
@@ -105,4 +119,50 @@ export async function fetchWeek(cfg: EspnConfig, week: number): Promise<WeekData
     }));
 
   return { matchups };
+}
+
+/**
+ * How many earlier weeks to fetch from ESPN at once, so a late-season tally isn't one big burst
+ * of requests. Each one is a single request, since earlier weeks skip the team names.
+ */
+const WEEKS_AT_ONCE = 6;
+const RETRY_DELAY_MS = 1000;
+
+/** Run `fn`, and if it fails, wait and try once more. */
+export async function withRetry<T>(fn: () => Promise<T>, retryDelayMs = RETRY_DELAY_MS): Promise<T> {
+  try {
+    return await fn();
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    return fn();
+  }
+}
+
+/** Map over `items` with at most `size` calls running at a time, keeping the input order. */
+export async function mapInBatches<T, R>(items: T[], size: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = [];
+  for (let i = 0; i < items.length; i += size) {
+    results.push(...(await Promise.all(items.slice(i, i + size).map(fn))));
+  }
+  return results;
+}
+
+export interface LeagueFetcher {
+  /** Fetch and normalize one week, with team names. */
+  week(week: number): Promise<WeekData>;
+  earlierWeeks(weeks: number[]): Promise<(WeekData & { week: number })[]>;
+}
+
+/** One ESPN client and one lineup-settings lookup, shared by every week fetched for a league. */
+export function leagueFetcher(cfg: EspnConfig): LeagueFetcher {
+  const client = makeClient(cfg);
+  const lineupSlots = fetchLineupSlots(client, cfg);
+  return {
+    week: (week) => fetchWeekWith(client, cfg, week, lineupSlots, true),
+    earlierWeeks: (weeks) =>
+      mapInBatches(weeks, WEEKS_AT_ONCE, async (week) => ({
+        week,
+        ...(await withRetry(() => fetchWeekWith(client, cfg, week, lineupSlots, false))),
+      })),
+  };
 }

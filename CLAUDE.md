@@ -4,7 +4,7 @@ Personal project. Every Tuesday it emails a recap of the past NFL week for each 
 
 ## Map
 - `src/recap.ts`: the entrypoint. Runs each league in `leagues.json` independently; one league failing never blocks another, and each failure emails `OWNER_ALERT_EMAIL`.
-- Pipeline: `espn.ts` (the only module that talks to ESPN) → `awards.ts` (pure logic) → `roast.ts` (Claude writes prose from a fixed fact sheet, so it can't invent numbers) → `format.ts` / `emailer.ts` (Resend).
+- Pipeline: `espn.ts` (the only module that talks to ESPN) → `awards.ts` (pure logic) → `leaderboard.ts` (season tally; there's no storage, so each run fetches Weeks 1..N again, and a failure here sends the recap without it) → `roast.ts` (Claude writes prose from a fixed fact sheet, so it can't invent numbers) → `format.ts` / `emailer.ts` (Resend).
 - `config.ts`: joins the committed `leagues.json` (non-secret) with the `LEAGUE_SECRETS_JSON` env var (ESPN cookies, keyed by league `id`).
 - `week.ts`: the week number comes from each league's `seasonWeek1Tuesday`; sends are limited to Weeks 1–14.
 - `guard.ts`: dedupe logic for the fallback schedule (see below).
