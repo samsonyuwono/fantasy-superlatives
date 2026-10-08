@@ -111,7 +111,6 @@ async function runLeagueRecap(
 
     let leaderboard: SeasonLeaderboard | undefined;
     let leaderboardError: Error | undefined;
-    // Only regular-season weeks are tallied: after Week 14, ESPN's matchup and scoring periods differ.
     if (week > 1 && isInSeason(week)) {
       try {
         const earlierWeekNumbers = Array.from({ length: week - 1 }, (_, i) => i + 1);
@@ -200,7 +199,6 @@ async function main(): Promise<void> {
         })),
     ];
 
-    // Send every alert even if one fails, so a Resend hiccup can't hide another league's problem.
     const alerts = await Promise.allSettled(alertJobs.map((job) => job.send()));
     alerts.forEach((a, i) => {
       if (a.status === 'rejected') {

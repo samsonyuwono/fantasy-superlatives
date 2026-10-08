@@ -102,7 +102,6 @@ async function fetchWeekWith(
   withNames: boolean,
 ): Promise<WeekData> {
   const [boxscores, teams, lineupSlots] = await Promise.all([
-    // For Weeks 1–14 the matchup period and scoring period both equal the NFL week.
     client.getBoxscoreForWeek({ seasonId: cfg.seasonYear, matchupPeriodId: week, scoringPeriodId: week }),
     withNames ? client.getTeamsAtWeek({ seasonId: cfg.seasonYear, scoringPeriodId: week }) : [],
     lineupSlotsPromise,
@@ -151,11 +150,6 @@ export async function mapInBatches<T, R>(items: T[], size: number, fn: (item: T)
 export interface LeagueFetcher {
   /** Fetch and normalize one week, with team names. */
   week(week: number): Promise<WeekData>;
-  /**
-   * Fetch earlier weeks for the season tally, a few at a time, retrying each once. Throws if any
-   * week still fails. Team names are left as "Team <id>" to save a request per week: the tally
-   * counts by teamId and takes names from the latest week, which is fetched with `week`.
-   */
   earlierWeeks(weeks: number[]): Promise<(WeekData & { week: number })[]>;
 }
 

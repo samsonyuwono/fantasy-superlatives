@@ -92,7 +92,6 @@ export function buildLeaderboard(weeks: WeekMatchups[]): SeasonLeaderboard | und
     const awards = computeAwards(matchups, week);
     for (const key of SEASON_AWARD_KEYS) {
       const teamId = awards[key].teamId;
-      // Placeholder results (no Bonehead swap, no decided matchups) carry no teamId.
       if (teamId === undefined) continue;
       counts[key].set(teamId, (counts[key].get(teamId) ?? 0) + 1);
     }
