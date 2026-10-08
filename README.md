@@ -93,7 +93,25 @@ gh secret set RECIPIENT_EMAIL       --body "you@example.com"
 gh workflow run "Weekly Superlatives Recap" -f week=1
 ```
 
-The `schedule` runs every Tuesday at **13:00 UTC** (8–9am ET). GitHub cron is UTC-only and can't
-follow daylight-saving time, so the send lands at 9am ET during EDT (Weeks ~1–8) and 8am ET during
-EST (Weeks ~9–14) — always a Tuesday morning, safely after Monday Night Football. The script
-gates itself to Weeks 1–14, so the cron can stay enabled year-round.
+### The 9am ET trigger
+
+GitHub's built-in scheduler routinely starts runs 4–6 hours late, so the on-time send comes from
+[cron-job.org](https://cron-job.org), which calls this workflow's dispatch API every Tuesday at
+**9:00 America/New_York** (DST handled). Dispatch runs start immediately. The workflow's own
+`schedule` (11am ET) is only a fallback: its guard job skips it if a "Weekly recap (9am trigger)"
+run already happened that day, so you never get two emails. The script gates itself to Weeks 1–14,
+so both triggers can stay enabled year-round.
+
+One-time setup:
+
+1. **GitHub token** — github.com/settings/personal-access-tokens → fine-grained, repository
+   `samsonyuwono/fantasy-superlatives` only, permission **Actions: Read and write**. Note the
+   expiry and renew it before then (if it lapses, the fallback still sends, just late).
+2. **cron-job.org job** — schedule Tuesdays 09:00, time zone `America/New_York`:
+   - `POST https://api.github.com/repos/samsonyuwono/fantasy-superlatives/actions/workflows/weekly-recap.yml/dispatches`
+   - Headers: `Authorization: Bearer <token>`, `Accept: application/vnd.github+json`,
+     `X-GitHub-Api-Version: 2022-11-28`
+   - Body: `{"ref":"main","inputs":{"source":"external-9am"}}` (GitHub replies `204`)
+   - Enable failure notifications.
+
+To simulate the 9am trigger by hand: `gh workflow run weekly-recap.yml -f source=external-9am -f week=N`.

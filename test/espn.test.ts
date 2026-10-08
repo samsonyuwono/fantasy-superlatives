@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { teamName, shouldSetCookies } from '../src/espn.js';
+import { teamName, shouldSetCookies, lineupSlotsFromCounts } from '../src/espn.js';
 
 describe('teamName', () => {
   it('collapses internal runs of whitespace to a single space', () => {
@@ -30,5 +30,27 @@ describe('shouldSetCookies', () => {
 
   it('is false when only one of the pair is present', () => {
     expect(shouldSetCookies({ leagueId: 1, seasonYear: 2026, espnS2: 'a' })).toBe(false);
+  });
+});
+
+describe('lineupSlotsFromCounts', () => {
+  it('expands slot counts into one entry per starting slot', () => {
+    expect(lineupSlotsFromCounts({ QB: 1, RB: 2, 'RB/WR/TE': 2, 'D/ST': 1 })).toEqual([
+      'QB',
+      'RB',
+      'RB',
+      'RB/WR/TE',
+      'RB/WR/TE',
+      'D/ST',
+    ]);
+  });
+
+  it('drops bench, IR, and unused (zero-count) slots', () => {
+    expect(lineupSlotsFromCounts({ QB: 1, K: 0, Bench: 7, IR: 1 })).toEqual(['QB']);
+  });
+
+  it('returns undefined when there are no settings to read', () => {
+    expect(lineupSlotsFromCounts(undefined)).toBeUndefined();
+    expect(lineupSlotsFromCounts({ Bench: 7 })).toBeUndefined();
   });
 });

@@ -1,19 +1,60 @@
 name: Weekly Superlatives Recap
+# Runs triggered by the external 9am scheduler get a fixed title so the fallback guard can find them.
+run-name: ${{ inputs.source == 'external-9am' && 'Weekly recap (9am trigger)' || github.workflow }}
 
 on:
+  # The on-time 9am ET send comes from cron-job.org calling this workflow's dispatch API
+  # (with source=external-9am) — GitHub's own scheduler routinely starts runs 4–6 hours late.
+  # This schedule is only a fallback in case that external trigger didn't fire; the guard job
+  # below skips it when the 9am run already happened. The script itself gates to Weeks 1–14.
   schedule:
-    # 13:00 UTC every Tuesday = 9am ET (EDT, Weeks ~1–8) / 8am ET (EST, Weeks ~9–14),
-    # always after Monday Night Football finalizes. The script itself gates to Weeks 1–14.
-    - cron: '0 13 * * 2'
+    - cron: '0 11 * * 2'
+      timezone: 'America/New_York'
   workflow_dispatch:
     inputs:
       week:
         description: 'Optional: force a specific NFL week (bypasses the Weeks 1–14 gate)'
         required: false
         type: string
+      source:
+        description: 'Set to "external-9am" by the external scheduler; leave blank for manual runs'
+        required: false
+        type: string
+
+# Never let two recap runs overlap (e.g. the 9am trigger and the fallback firing together).
+concurrency:
+  group: weekly-recap
+  cancel-in-progress: false
 
 jobs:
+  # On the fallback schedule, skip if today's 9am-triggered run already happened (see src/guard.ts).
+  # Manual dispatches always proceed.
+  guard:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - id: check
+        run: npx tsx src/guard.ts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
   recap:
+    needs: guard
+    if: needs.guard.outputs.skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
