@@ -58,9 +58,9 @@ export interface WeekData {
 }
 
 /** A team's display name with whitespace tidied, falling back to its abbreviation, then "Team <id>". */
-export function teamName(team: RawTeam | undefined): string {
-  const name = typeof team?.name === 'string' ? team.name.replace(/\s+/g, ' ').trim() : '';
-  return name || team?.abbreviation || `Team ${team?.id ?? '?'}`;
+export function teamName(team: RawTeam): string {
+  const name = typeof team.name === 'string' ? team.name.replace(/\s+/g, ' ').trim() : '';
+  return name || team.abbreviation || `Team ${team.id ?? '?'}`;
 }
 
 /**
@@ -74,12 +74,12 @@ export function lineupSlotsFromCounts(counts: Record<string, number> | undefined
   return slots.length ? slots : undefined;
 }
 
-function normalizePlayer(bp: RawPlayer | undefined): NormalizedPlayer {
+function normalizePlayer(bp: RawPlayer): NormalizedPlayer {
   return {
-    name: bp?.fullName ?? 'Unknown Player',
-    points: typeof bp?.totalPoints === 'number' ? bp.totalPoints : 0,
-    slot: bp?.rosteredPosition ?? 'Bench',
-    eligibleSlots: Array.isArray(bp?.eligiblePositions) ? bp.eligiblePositions : [],
+    name: bp.fullName ?? 'Unknown Player',
+    points: typeof bp.totalPoints === 'number' ? bp.totalPoints : 0,
+    slot: bp.rosteredPosition ?? 'Bench',
+    eligibleSlots: Array.isArray(bp.eligiblePositions) ? bp.eligiblePositions : [],
   };
 }
 
@@ -134,7 +134,7 @@ async function fetchWeekWith(
 
   const nameById = new Map<number, string>();
   for (const t of teams) {
-    if (typeof t?.id === 'number') nameById.set(t.id, teamName(t));
+    if (typeof t.id === 'number') nameById.set(t.id, teamName(t));
   }
 
   const matchups: NormalizedMatchup[] = boxscores
