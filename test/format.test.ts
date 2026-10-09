@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatEmailBody, formatLeaderboard, formatSubject } from '../src/format.js';
+import { bold, formatEmailBody, formatLeaderboard, formatSubject } from '../src/format.js';
 import type { WeekAwards } from '../src/awards.js';
 import type { SeasonLeaderboard } from '../src/leaderboard.js';
 
@@ -45,16 +45,34 @@ const leaderboard: SeasonLeaderboard = {
   nameById: new Map(),
 };
 
+describe('bold', () => {
+  it('wraps text in WhatsApp bold markers', () => {
+    expect(bold('Jurong FC')).toBe('*Jurong FC*');
+  });
+
+  it('keeps emoji inside the bold', () => {
+    expect(bold('🚀🚀 Ken Walker! 🚀🚀')).toBe('*🚀🚀 Ken Walker! 🚀🚀*');
+  });
+
+  it('leaves text with its own asterisk plain, since WhatsApp has no way to escape it', () => {
+    expect(bold('Team *Star*')).toBe('Team *Star*');
+  });
+
+  it('leaves empty text alone', () => {
+    expect(bold('')).toBe('');
+  });
+});
+
 describe('formatLeaderboard', () => {
   const lines = formatLeaderboard(leaderboard);
 
   it('titles the section with the weeks covered', () => {
-    expect(lines).toContain('📊 SEASON LEADERBOARD (Weeks 1–5)');
+    expect(lines).toContain('*📊 SEASON LEADERBOARD (Weeks 1–5)*');
   });
 
   it('lists each award leader with their count, joining ties', () => {
-    expect(lines).toContain('💀 The Corpse — Jurong FC ×3');
-    expect(lines).toContain('😤 Robbed — Alpha, Bravo ×2');
+    expect(lines).toContain('💀 *The Corpse* — *Jurong FC* ×3');
+    expect(lines).toContain('😤 *Robbed* — *Alpha*, *Bravo* ×2');
   });
 
   it('leaves out Baller of the Week, which is about a player, not a team', () => {
@@ -66,8 +84,8 @@ describe('formatLeaderboard', () => {
   });
 
   it('shows The Sleepwalker as a win count like the other awards', () => {
-    expect(lines).toContain('😴 The Sleepwalker — Delta ×2');
-    expect(lines.at(-1)).toBe('😤 Robbed — Alpha, Bravo ×2');
+    expect(lines).toContain('😴 *The Sleepwalker* — *Delta* ×2');
+    expect(lines.at(-1)).toBe('😤 *Robbed* — *Alpha*, *Bravo* ×2');
   });
 });
 
@@ -79,5 +97,31 @@ describe('formatEmailBody', () => {
 
   it('leaves the leaderboard out when there is none', () => {
     expect(formatEmailBody(awards, 'roast')).not.toContain('SEASON LEADERBOARD');
+  });
+});
+
+describe('formatEmailBody WhatsApp formatting', () => {
+  const lines = formatEmailBody(awards, 'roast').split('\n');
+
+  it('bolds the section header', () => {
+    expect(lines).toContain('*🏆 WEEK 5 AWARDS*');
+  });
+
+  it('bolds each award title and team, but not players or numbers', () => {
+    expect(lines).toEqual(
+      expect.arrayContaining([
+        '💪 *The Juggernaut* — *Bravo* (120.0)',
+        '💀 *The Corpse* — *Jurong FC* (60.0)',
+        '⭐ *Baller of the Week* — Puka Nacua, *Alpha* (31.0)',
+        '😴 *The Sleepwalker* — *Delta* left 40.0 on the bench',
+        '🤡 *The Bonehead* — *Alpha*: started B (2.0) over A (20.0) at WR',
+        '🍀 *Backed Into It* — *Charlie* won with 70.0',
+        '😤 *Robbed* — *Alpha* lost with 110.0',
+      ]),
+    );
+  });
+
+  it('leaves the roast exactly as Claude wrote it', () => {
+    expect(formatEmailBody(awards, '  The Corpse: rough week.  ').startsWith('The Corpse: rough week.\n')).toBe(true);
   });
 });
