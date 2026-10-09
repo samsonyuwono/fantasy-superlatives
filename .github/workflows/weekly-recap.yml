@@ -50,7 +50,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
 
-      - name: Send the weekly recap
+      - id: recap
+        name: Send the weekly recap
         if: steps.guard.outputs.skip != 'true'
         run: |
           if [ -n "${{ inputs.week }}" ]; then
@@ -67,14 +68,15 @@ jobs:
           OWNER_ALERT_EMAIL: ${{ secrets.OWNER_ALERT_EMAIL }}
 
       # Per-league failures are alerted from inside recap.ts (one alert per failed league, to
-      # OWNER_ALERT_EMAIL). This step is only a last-resort net for a whole-job crash before
-      # that logic could even run (e.g. `npm ci` failing) — it can't know which league failed.
+      # OWNER_ALERT_EMAIL). This step is only a last-resort net for a crash before those alerts
+      # went out (e.g. `npm ci` failing). recap.ts exits 1 when a league fails too, so skip this
+      # when it already alerted.
       - name: Email me if the whole job crashed
-        if: failure()
+        if: failure() && steps.recap.outputs.alerted != 'true'
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           OWNER_ALERT_EMAIL: ${{ secrets.OWNER_ALERT_EMAIL }}
         run: |
           bash .github/scripts/send-crash-alert.sh "⚠️ Fantasy recap job CRASHED" \
-            "The fantasy superlatives job failed before it could run any league. Check the run logs:"
+            "The fantasy recap job failed before it could send its own alerts, so some or all leagues may not have been sent. Check the run logs:"

@@ -5,17 +5,24 @@
  * Usage:
  *   tsx src/cookie-check.ts             # check leagues whose next Tuesday is a Weeks 1–14 send
  *   tsx src/cookie-check.ts --force     # check every league, in season or not
- *   tsx src/cookie-check.ts --dry-run   # log the results without emailing
+ *   tsx src/cookie-check.ts --dry-run   # log the results, and print any alert instead of emailing it
  */
 import 'dotenv/config';
-import { appendFileSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { checkLeagueAccess, EspnAccessError } from './espn.js';
-import { sendEspnCheckAlert, type CheckFailure, type FailureKind, type SecretFixes } from './emailer.js';
+import { espnCheckAlertContent, sendEspnCheckAlert, type CheckFailure, type FailureKind, type SecretFixes } from './emailer.js';
 import { completedWeek, isInSeason } from './week.js';
-import { required, githubRunUrl } from './env.js';
-import { parseLeaguesJson, parseLeagueSecretsJson, resolveEspnConfig, type LeagueConfig, type LeagueSecrets } from './config.js';
+import { required, githubRunUrl, setGithubOutput } from './env.js';
+import {
+  accountsToUpdate,
+  parseLeaguesJson,
+  parseLeagueSecretsJson,
+  resolveEspnConfig,
+  type LeagueConfig,
+  type LeagueSecrets,
+} from './config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..');
@@ -36,16 +43,6 @@ export function classifyFailure(league: LeagueConfig, secrets: Record<string, Le
   if (!(error instanceof EspnAccessError)) return 'other';
   if (error.isAuthFailure) return 'cookies';
   return error.failure === 'unreadable' ? 'unclear' : 'other';
-}
-
-/**
- * Every secret entry to refresh, grouped by ESPN account. SWID identifies the account and stays
- * the same across logins, so it finds entries that share a login even if their espnS2 differ.
- */
-export function accountsToUpdate(failedIds: string[], secrets: Record<string, LeagueSecrets>): string[][] {
-  const swidOf = (id: string) => secrets[id]?.swid.toUpperCase();
-  const swids = [...new Set(failedIds.map(swidOf).filter((swid): swid is string => swid !== undefined))];
-  return swids.map((swid) => Object.keys(secrets).filter((id) => swidOf(id) === swid));
 }
 
 /** What to fix in LEAGUE_SECRETS_JSON for these failures. */
@@ -87,12 +84,18 @@ async function main(): Promise<void> {
     return [{ league, error, kind: classifyFailure(league, secrets, error) }];
   });
 
+  if (failures.length > 0 && dryRun) {
+    const { subject, text } = espnCheckAlertContent(failures, secretFixes(failures, secrets));
+    console.info(`\n--- DRY RUN: the alert that would go to ${ownerAlertEmail} (not sending) ---`);
+    console.info(`Subject: ${subject}\n\n${text}\n`);
+  }
+
   if (failures.length > 0 && !dryRun) {
     const runUrl = githubRunUrl();
     const fixes = secretFixes(failures, secrets);
     await sendEspnCheckAlert({ apiKey: resendApiKey, from: emailFrom, ownerEmail: ownerAlertEmail, failures, fixes, runUrl });
     console.info(`Sent the ESPN check alert to ${ownerAlertEmail}.`);
-    if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, 'alerted=true\n');
+    setGithubOutput('alerted', 'true');
   }
 
   console.info(`Done: ${due.length - failures.length}/${due.length} leagues passed.`);

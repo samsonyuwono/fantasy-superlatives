@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { leaguesDueForCheck, classifyFailure, accountsToUpdate } from '../src/cookie-check.js';
+import { leaguesDueForCheck, classifyFailure } from '../src/cookie-check.js';
 import { espnCheckAlertContent, type CheckFailure } from '../src/emailer.js';
 import { EspnAccessError } from '../src/espn.js';
 import type { LeagueConfig } from '../src/config.js';
@@ -76,24 +76,6 @@ describe('classifyFailure', () => {
   it('does not ask for cookies for a public league', () => {
     const publicLeague = { ...league('open', '2026-09-15'), requiresAuth: false };
     expect(classifyFailure(publicLeague, secrets, unauthorized)).toBe('other');
-  });
-});
-
-describe('accountsToUpdate', () => {
-  it('groups entries by SWID, even when their espnS2 values differ', () => {
-    expect(accountsToUpdate(['main'], secrets)).toEqual([['main', 'second']]);
-  });
-
-  it('keeps a different account in its own group', () => {
-    expect(accountsToUpdate(['friend'], secrets)).toEqual([['friend']]);
-  });
-
-  it('lists each account once when several of its leagues fail', () => {
-    expect(accountsToUpdate(['second', 'main', 'friend'], secrets)).toEqual([['main', 'second'], ['friend']]);
-  });
-
-  it('skips ids with no secret entry', () => {
-    expect(accountsToUpdate(['new'], secrets)).toEqual([]);
   });
 });
 

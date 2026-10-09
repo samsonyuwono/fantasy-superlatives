@@ -31,6 +31,34 @@ export interface AlertLeague {
   displayName: string;
 }
 
+/**
+ * Subject and text for a failed recap. Pass `fixes` when ESPN rejected the cookies, to add the
+ * steps for refreshing them and re-sending the recap.
+ */
+export function failureAlertContent(
+  league: AlertLeague,
+  error: Error,
+  runUrl?: string,
+  fixes?: SecretFixes,
+): { subject: string; text: string } {
+  const lines = [`The fantasy recap for ${league.displayName} (id "${league.id}") did not send.`, '', `Error: ${error.message}`];
+  if (fixes) {
+    lines.push(
+      '',
+      'ESPN rejected the cookies, so they have probably expired.',
+      '',
+      'HOW TO FIX THE COOKIES',
+      ...stepsText(cookieFixSteps(fixes), true),
+      '',
+      'Once the cookies are fixed, re-send the recap:',
+      '     gh workflow run weekly-recap.yml',
+      "   This re-sends every league's recap, not just this one.",
+    );
+  }
+  if (runUrl) lines.push('', `Run: ${runUrl}`);
+  return { subject: `⚠️ Fantasy recap FAILED (${league.displayName})`, text: lines.join('\n') };
+}
+
 /** Notify the owner (not the friend group) that one league's recap failed to send. */
 export async function sendFailureAlert(opts: {
   apiKey: string;
@@ -39,21 +67,11 @@ export async function sendFailureAlert(opts: {
   league: AlertLeague;
   error: Error;
   runUrl?: string;
+  fixes?: SecretFixes;
 }): Promise<void> {
   const resend = new Resend(opts.apiKey);
-  const lines = [
-    `The fantasy recap for ${opts.league.displayName} (id "${opts.league.id}") did not send.`,
-    '',
-    `Error: ${opts.error.message}`,
-  ];
-  if (opts.runUrl) lines.push('', `Run: ${opts.runUrl}`);
-
-  const { error } = await resend.emails.send({
-    from: opts.from,
-    to: opts.ownerEmail,
-    subject: `⚠️ Fantasy recap FAILED (${opts.league.displayName})`,
-    text: lines.join('\n'),
-  });
+  const { subject, text } = failureAlertContent(opts.league, opts.error, opts.runUrl, opts.fixes);
+  const { error } = await resend.emails.send({ from: opts.from, to: opts.ownerEmail, subject, text });
   if (error) {
     throw new Error(`Resend failed to send failure alert: ${error.name} — ${error.message}`);
   }

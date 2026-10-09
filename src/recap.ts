@@ -14,14 +14,21 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { computeAwards } from './awards.js';
-import { leagueFetcher } from './espn.js';
+import { EspnAccessError, httpStatus, leagueFetcher } from './espn.js';
 import { buildLeaderboard, type SeasonLeaderboard } from './leaderboard.js';
 import { generateRoast } from './roast.js';
 import { formatEmailBody, formatSubject } from './format.js';
-import { sendRecap, sendFailureAlert, sendLeaderboardSkippedAlert } from './emailer.js';
+import { sendRecap, sendFailureAlert, sendLeaderboardSkippedAlert, type SecretFixes } from './emailer.js';
 import { completedWeek, isInSeason } from './week.js';
-import { required, githubRunUrl } from './env.js';
-import { parseLeaguesJson, parseLeagueSecretsJson, resolveEspnConfig, type LeagueConfig, type LeagueSecrets } from './config.js';
+import { required, githubRunUrl, setGithubOutput } from './env.js';
+import {
+  accountsToUpdate,
+  parseLeaguesJson,
+  parseLeagueSecretsJson,
+  resolveEspnConfig,
+  type LeagueConfig,
+  type LeagueSecrets,
+} from './config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..');
@@ -149,6 +156,13 @@ async function runLeagueRecap(
   }
 }
 
+/** The cookie fixes for a failed league when ESPN rejected its cookies (401/403), else undefined. */
+export function cookieFixesFor(leagueId: string, error: Error, secrets: Record<string, LeagueSecrets>): SecretFixes | undefined {
+  if (!EspnAccessError.isAuthStatus(httpStatus(error))) return undefined;
+  const accounts = accountsToUpdate([leagueId], secrets);
+  return accounts.length > 0 ? { accounts, missing: [] } : undefined;
+}
+
 /** Pure summary of a batch of league results: which failed, and the process exit code. */
 export function summarize(results: RecapResult[]): { failed: RecapResult[]; exitCode: number } {
   const failed = results.filter((r) => r.status === 'failed');
@@ -183,13 +197,18 @@ async function main(): Promise<void> {
     const alertJobs = [
       ...failed.map((r) => {
         const league = leagueById.get(r.leagueId)!;
-        return { league, send: () => sendFailureAlert({ ...alertBase, league, error: r.error! }) };
+        const fixes = cookieFixesFor(r.leagueId, r.error!, secrets);
+        return { league, failure: true, send: () => sendFailureAlert({ ...alertBase, league, error: r.error!, fixes }) };
       }),
       ...results
         .filter((r) => r.leaderboardError)
         .map((r) => {
           const league = leagueById.get(r.leagueId)!;
-          return { league, send: () => sendLeaderboardSkippedAlert({ ...alertBase, league, error: r.leaderboardError! }) };
+          return {
+            league,
+            failure: false,
+            send: () => sendLeaderboardSkippedAlert({ ...alertBase, league, error: r.leaderboardError! }),
+          };
         }),
     ];
 
@@ -199,6 +218,11 @@ async function main(): Promise<void> {
         console.error(`[${alertJobs[i]!.league.displayName}] Alert did not send:`, a.reason);
       }
     });
+
+    // Tells the workflow's crash step that every failed league has already been alerted.
+    if (failed.length > 0 && alerts.every((a, i) => !alertJobs[i]!.failure || a.status === 'fulfilled')) {
+      setGithubOutput('alerted', 'true');
+    }
   }
 
   console.info(`Done: ${results.length - failed.length}/${results.length} leagues succeeded.`);
