@@ -8,6 +8,7 @@ Personal project. Every Tuesday it emails a recap of the past NFL week for each 
 - `config.ts`: joins the committed `leagues.json` (non-secret) with the `LEAGUE_SECRETS_JSON` env var (ESPN cookies, keyed by league `id`).
 - `week.ts`: the week number comes from each league's `seasonWeek1Tuesday`; sends are limited to Weeks 1–14.
 - `guard.ts`: dedupe logic for the fallback schedule (see below).
+- `cookie-check.ts`: Monday check (`cookie-check.yml`) that ESPN still accepts each league's cookies. It sends one combined alert to `OWNER_ALERT_EMAIL`.
 - `SETUP.md`: how to onboard a friend's league. `FEATURE_IDEAS.md`: backlog.
 
 ## Verify

@@ -6,6 +6,7 @@
   "description": "Weekly ESPN fantasy football superlatives agent — emails a punchy roast every Tuesday.",
   "scripts": {
     "recap": "tsx src/recap.ts",
+    "cookie-check": "tsx src/cookie-check.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

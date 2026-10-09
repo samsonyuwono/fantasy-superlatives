@@ -11,7 +11,7 @@
  *   tsx src/guard.ts   # reads GITHUB_EVENT_NAME, writes skip=true|false to $GITHUB_OUTPUT
  */
 import { execFileSync } from 'node:child_process';
-import { appendFileSync } from 'node:fs';
+import { setGithubOutput } from './env.js';
 
 /** Must match the `run-name` title in .github/workflows/weekly-recap.yml. */
 export const NINE_AM_RUN_TITLE = 'Weekly recap (9am trigger)';
@@ -54,14 +54,13 @@ function main(): void {
       : [];
 
   const skip = shouldSkipFallback(eventName, recentRuns, new Date());
-  console.log(
+  console.info(
     skip
       ? `The 9am-triggered run already happened today (${newYorkDate(new Date())}). Skipping the fallback.`
       : `Proceeding with the recap (event: ${eventName || 'unknown'}).`,
   );
 
-  const outputFile = process.env.GITHUB_OUTPUT;
-  if (outputFile) appendFileSync(outputFile, `skip=${skip}\n`);
+  setGithubOutput('skip', String(skip));
 }
 
 // Only run when executed directly (`tsx src/guard.ts`), not when imported by tests.

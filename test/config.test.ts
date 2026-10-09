@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseLeaguesJson, parseLeagueSecretsJson, resolveEspnConfig } from '../src/config.js';
+import { accountsToUpdate, parseLeaguesJson, parseLeagueSecretsJson, resolveEspnConfig } from '../src/config.js';
 
 const VALID_LEAGUE = {
   id: 'main',
@@ -69,5 +69,29 @@ describe('resolveEspnConfig', () => {
     const publicLeague = { ...VALID_LEAGUE, requiresAuth: false };
     const cfg = resolveEspnConfig(publicLeague, {});
     expect(cfg).toEqual({ leagueId: 123456, seasonYear: 2026 });
+  });
+});
+
+describe('accountsToUpdate', () => {
+  const secrets = {
+    main: { espnS2: 'mine-new', swid: '{ME}' },
+    second: { espnS2: 'mine-old', swid: '{me}' },
+    friend: { espnS2: 'theirs', swid: '{THEM}' },
+  };
+
+  it('groups entries by SWID, even when their espnS2 values differ', () => {
+    expect(accountsToUpdate(['main'], secrets)).toEqual([['main', 'second']]);
+  });
+
+  it('keeps a different account in its own group', () => {
+    expect(accountsToUpdate(['friend'], secrets)).toEqual([['friend']]);
+  });
+
+  it('lists each account once when several of its leagues fail', () => {
+    expect(accountsToUpdate(['second', 'main', 'friend'], secrets)).toEqual([['main', 'second'], ['friend']]);
+  });
+
+  it('skips ids with no secret entry', () => {
+    expect(accountsToUpdate(['new'], secrets)).toEqual([]);
   });
 });

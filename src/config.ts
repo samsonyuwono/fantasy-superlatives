@@ -134,3 +134,13 @@ export function resolveEspnConfig(league: LeagueConfig, secrets: Record<string, 
     swid: entry.swid,
   };
 }
+
+/**
+ * Every secret entry to refresh, grouped by ESPN account. SWID identifies the account and stays
+ * the same across logins, so it finds entries that share a login even if their espnS2 differ.
+ */
+export function accountsToUpdate(failedIds: string[], secrets: Record<string, LeagueSecrets>): string[][] {
+  const swidOf = (id: string) => secrets[id]?.swid.toUpperCase();
+  const swids = [...new Set(failedIds.map(swidOf).filter((swid): swid is string => swid !== undefined))];
+  return swids.map((swid) => Object.keys(secrets).filter((id) => swidOf(id) === swid));
+}
