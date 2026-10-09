@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path';
 import { checkLeagueAccess, EspnAccessError } from './espn.js';
 import { sendEspnCheckAlert, type CheckFailure, type FailureKind, type SecretFixes } from './emailer.js';
 import { completedWeek, isInSeason } from './week.js';
+import { required, githubRunUrl } from './env.js';
 import { parseLeaguesJson, parseLeagueSecretsJson, resolveEspnConfig, type LeagueConfig, type LeagueSecrets } from './config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -56,12 +57,6 @@ export function secretFixes(failures: CheckFailure[], secrets: Record<string, Le
   };
 }
 
-function required(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing required environment variable: ${name}`);
-  return value;
-}
-
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const dryRun = argv.includes('--dry-run');
@@ -93,9 +88,7 @@ async function main(): Promise<void> {
   });
 
   if (failures.length > 0 && !dryRun) {
-    const runUrl = process.env.GITHUB_SERVER_URL && process.env.GITHUB_REPOSITORY && process.env.GITHUB_RUN_ID
-      ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
-      : undefined;
+    const runUrl = githubRunUrl();
     const fixes = secretFixes(failures, secrets);
     await sendEspnCheckAlert({ apiKey: resendApiKey, from: emailFrom, ownerEmail: ownerAlertEmail, failures, fixes, runUrl });
     console.info(`Sent the ESPN check alert to ${ownerAlertEmail}.`);

@@ -20,6 +20,7 @@ import { generateRoast } from './roast.js';
 import { formatEmailBody, formatSubject } from './format.js';
 import { sendRecap, sendFailureAlert, sendLeaderboardSkippedAlert } from './emailer.js';
 import { completedWeek, isInSeason } from './week.js';
+import { required, githubRunUrl } from './env.js';
 import { parseLeaguesJson, parseLeagueSecretsJson, resolveEspnConfig, type LeagueConfig, type LeagueSecrets } from './config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -57,12 +58,6 @@ function parseArgs(argv: string[]): Args {
     }
   }
   return args;
-}
-
-function required(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing required environment variable: ${name}`);
-  return value;
 }
 
 function loadSharedConfig(): SharedConfig {
@@ -182,9 +177,7 @@ async function main(): Promise<void> {
   const leagueById = new Map(leagues.map((l) => [l.id, l]));
 
   if (!args.dryRun) {
-    const runUrl = process.env.GITHUB_SERVER_URL && process.env.GITHUB_REPOSITORY && process.env.GITHUB_RUN_ID
-      ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
-      : undefined;
+    const runUrl = githubRunUrl();
 
     const alertBase = { apiKey: shared.resendApiKey, from: shared.emailFrom, ownerEmail: shared.ownerAlertEmail, runUrl };
     const alertJobs = [
