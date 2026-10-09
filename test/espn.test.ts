@@ -4,7 +4,7 @@ import { teamName, shouldSetCookies, lineupSlotsFromCounts, mapInBatches, withRe
 const calls = vi.hoisted(() => ({
   boxscores: [] as number[],
   teams: [] as number[],
-  leagueInfo: 'ok' as 'ok' | 401 | 503 | 'empty',
+  leagueInfo: 'ok' as 'ok' | 401 | 503 | 'network' | 'unreadable' | 'empty',
 }));
 vi.mock('espn-fantasy-football-api/node', () => ({
   default: {
@@ -14,6 +14,12 @@ vi.mock('espn-fantasy-football-api/node', () => ({
         if (typeof calls.leagueInfo === 'number') {
           const status = calls.leagueInfo;
           throw Object.assign(new Error(`Request failed with status code ${status}`), { response: { status } });
+        }
+        if (calls.leagueInfo === 'network') {
+          throw Object.assign(new Error('getaddrinfo ENOTFOUND lm-api-reads.fantasy.espn.com'), { isAxiosError: true });
+        }
+        if (calls.leagueInfo === 'unreadable') {
+          throw new TypeError("Cannot read properties of undefined (reading 'currentMatchupPeriod')");
         }
         if (calls.leagueInfo === 'empty') return {};
         return { rosterSettings: { lineupPositionCount: { QB: 1 } } };
@@ -175,21 +181,36 @@ describe('checkLeagueAccess', () => {
     calls.leagueInfo = 401;
     const err = await failure();
     expect(err).toBeInstanceOf(EspnAccessError);
-    expect(err).toMatchObject({ status: 401, isAuthFailure: true });
+    expect(err).toMatchObject({ failure: 'rejected', status: 401, isAuthFailure: true });
     expect(String(err)).toMatch(/league 123.*401.*cookies may have expired/);
   });
 
   it('does not blame the cookies for a server error', async () => {
     calls.leagueInfo = 503;
     const err = await failure();
-    expect(err).toMatchObject({ status: 503, isAuthFailure: false });
+    expect(err).toMatchObject({ failure: 'rejected', status: 503, isAuthFailure: false });
     expect(String(err)).not.toContain('cookies');
+  });
+
+  it('says ESPN could not be reached for a network error, not that it rejected the request', async () => {
+    calls.leagueInfo = 'network';
+    const err = await failure();
+    expect(err).toMatchObject({ failure: 'unreachable', status: undefined });
+    expect(String(err)).toMatch(/Could not reach ESPN for league 123 \(season 2026\): getaddrinfo ENOTFOUND/);
+  });
+
+  it('says the response could not be read when the library throws while parsing it', async () => {
+    calls.leagueInfo = 'unreadable';
+    const err = await failure();
+    expect(err).toMatchObject({ failure: 'unreadable', status: undefined });
+    expect(String(err)).toMatch(/ESPN sent a response for league 123 .* that could not be read: Cannot read properties/);
+    expect(String(err)).not.toContain('rejected');
   });
 
   it('rejects without a status when ESPN returns no settings', async () => {
     calls.leagueInfo = 'empty';
     const err = await failure();
-    expect(err).toMatchObject({ status: undefined, isAuthFailure: false });
+    expect(err).toMatchObject({ failure: 'unreadable', status: undefined, isAuthFailure: false });
     expect(String(err)).toMatch(/no settings for league 123/);
   });
 });

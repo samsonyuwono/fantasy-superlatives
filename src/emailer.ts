@@ -60,7 +60,7 @@ export async function sendFailureAlert(opts: {
 }
 
 /** Why a league failed the Monday check, which decides what the alert tells the owner to do. */
-export type FailureKind = 'cookies' | 'missing-secret' | 'other';
+export type FailureKind = 'cookies' | 'unclear' | 'missing-secret' | 'other';
 
 export interface CheckFailure {
   league: AlertLeague;
@@ -86,6 +86,7 @@ interface FixStep {
 
 const KIND_LABEL: Record<FailureKind, string> = {
   cookies: 'Cookies rejected',
+  unclear: 'Unexpected response from ESPN (may be the cookies)',
   'missing-secret': 'No entry in LEAGUE_SECRETS_JSON',
   other: 'Not a cookie problem',
 };
@@ -122,6 +123,15 @@ export function cookieFixSteps(fixes: SecretFixes): FixStep[] {
     { text: 'Confirm in CI:', command: 'gh workflow run cookie-check.yml -f force=true' },
   ];
 }
+
+const UNCLEAR_FAILURE_STEPS: FixStep[] = [
+  {
+    text: "ESPN answered, but not with the league's settings. Partly accepted cookies can cause this, so these leagues are included in the cookie steps above.",
+  },
+  {
+    text: "If fresh cookies don't fix it, ESPN may have changed its API. Check the run log for the full error.",
+  },
+];
 
 const OTHER_FAILURE_STEPS: FixStep[] = [
   {
@@ -176,11 +186,14 @@ export function espnCheckAlertContent(
   const allCookies = failures.every((f) => f.kind === 'cookies');
   const subject = allCookies ? `⚠️ ESPN cookies may have expired (${names})` : `⚠️ ESPN check failed (${names})`;
   const count = failures.length === 1 ? '1 league' : `${failures.length} leagues`;
-  const intro = `The Monday ESPN check failed for ${count}. Tuesday's recap will fail for ${failures.length === 1 ? 'it' : 'them'} unless this is fixed.`;
+  const intro = `The ESPN check failed for ${count}. The next recap for ${failures.length === 1 ? 'it' : 'them'} will fail unless this is fixed.`;
 
   const sections: { heading: string; steps: FixStep[]; numbered: boolean }[] = [];
   if (fixes.accounts.length > 0 || fixes.missing.length > 0) {
     sections.push({ heading: 'How to fix the cookies', steps: cookieFixSteps(fixes), numbered: true });
+  }
+  if (failures.some((f) => f.kind === 'unclear')) {
+    sections.push({ heading: 'Unexpected response from ESPN', steps: UNCLEAR_FAILURE_STEPS, numbered: false });
   }
   if (failures.some((f) => f.kind === 'other')) {
     sections.push({ heading: 'Not a cookie problem', steps: OTHER_FAILURE_STEPS, numbered: false });
@@ -244,7 +257,7 @@ export async function sendLeaderboardSkippedAlert(opts: {
 }): Promise<void> {
   const resend = new Resend(opts.apiKey);
   const lines = [
-    `The fantasy recap for ${opts.league.displayName} was sent, but without the season leaderboard.`,
+    `The fantasy recap for ${opts.league.displayName} (id "${opts.league.id}") was sent, but without the season leaderboard.`,
     '',
     `Error: ${opts.error.message}`,
   ];

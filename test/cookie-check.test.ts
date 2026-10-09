@@ -51,17 +51,21 @@ const secrets = {
 };
 
 describe('classifyFailure', () => {
-  const unauthorized = new EspnAccessError('ESPN rejected the request: 401', 401);
+  const main = league('main', '2026-09-15');
+  const unauthorized = new EspnAccessError('ESPN rejected the request: 401', 'rejected', 401);
 
   it('calls a 401 or 403 a cookie problem', () => {
-    expect(classifyFailure(league('main', '2026-09-15'), secrets, unauthorized)).toBe('cookies');
-    expect(classifyFailure(league('main', '2026-09-15'), secrets, new EspnAccessError('403', 403))).toBe('cookies');
+    expect(classifyFailure(main, secrets, unauthorized)).toBe('cookies');
+    expect(classifyFailure(main, secrets, new EspnAccessError('403', 'rejected', 403))).toBe('cookies');
   });
 
-  it('does not blame the cookies for a server error, an empty response, or a non-ESPN error', () => {
-    const main = league('main', '2026-09-15');
-    expect(classifyFailure(main, secrets, new EspnAccessError('ESPN rejected the request: 503', 503))).toBe('other');
-    expect(classifyFailure(main, secrets, new EspnAccessError('ESPN returned no settings'))).toBe('other');
+  it('calls an unreadable response unclear, since the cookies may be the cause', () => {
+    expect(classifyFailure(main, secrets, new EspnAccessError('could not be read', 'unreadable'))).toBe('unclear');
+  });
+
+  it('does not blame the cookies for a server error, an unreachable ESPN, or a non-ESPN error', () => {
+    expect(classifyFailure(main, secrets, new EspnAccessError('ESPN rejected the request: 503', 'rejected', 503))).toBe('other');
+    expect(classifyFailure(main, secrets, new EspnAccessError('Could not reach ESPN', 'unreachable'))).toBe('other');
     expect(classifyFailure(main, secrets, new Error('boom'))).toBe('other');
   });
 
@@ -119,6 +123,21 @@ describe('espnCheckAlertContent', () => {
     expect(subject).toBe('⚠️ ESPN check failed (New)');
     expect(text).toContain('Add an entry for new');
     expect(text).not.toContain('Update espnS2');
+  });
+
+  it('says the next recap will fail, without assuming a day', () => {
+    const { text } = espnCheckAlertContent([cookieFailure(main)], sharedAccount);
+    expect(text).toContain('The ESPN check failed for 1 league. The next recap for it will fail');
+    expect(text).not.toContain('Tuesday');
+  });
+
+  it('includes cookie steps and an explanation for an unreadable response', () => {
+    const unclear: CheckFailure = { league: main, error: new Error('could not be read'), kind: 'unclear' };
+    const { subject, text } = espnCheckAlertContent([unclear], { accounts: [['main', 'second']], missing: [] });
+    expect(subject).toBe('⚠️ ESPN check failed (Main League)');
+    expect(text).toContain('HOW TO FIX THE COOKIES');
+    expect(text).toContain('UNEXPECTED RESPONSE FROM ESPN');
+    expect(text).not.toContain('NOT A COOKIE PROBLEM');
   });
 
   it('gives no cookie steps when nothing is a cookie problem', () => {

@@ -27,11 +27,14 @@ export function leaguesDueForCheck(leagues: LeagueConfig[], now: Date, force: bo
 
 /**
  * Why a league failed: no secret entry when it needs one, ESPN rejecting its cookies (401/403),
- * or anything else, such as ESPN being down or a wrong league ID.
+ * ESPN answering with something unreadable (which may be the cookies), or anything else, such
+ * as ESPN being unreachable or a wrong league ID.
  */
 export function classifyFailure(league: LeagueConfig, secrets: Record<string, LeagueSecrets>, error: Error): FailureKind {
   if (!secrets[league.id]) return league.requiresAuth === false ? 'other' : 'missing-secret';
-  return error instanceof EspnAccessError && error.isAuthFailure ? 'cookies' : 'other';
+  if (!(error instanceof EspnAccessError)) return 'other';
+  if (error.isAuthFailure) return 'cookies';
+  return error.failure === 'unreadable' ? 'unclear' : 'other';
 }
 
 /**
@@ -47,7 +50,10 @@ export function accountsToUpdate(failedIds: string[], secrets: Record<string, Le
 /** What to fix in LEAGUE_SECRETS_JSON for these failures. */
 export function secretFixes(failures: CheckFailure[], secrets: Record<string, LeagueSecrets>): SecretFixes {
   const idsOf = (kind: FailureKind) => failures.filter((f) => f.kind === kind).map((f) => f.league.id);
-  return { accounts: accountsToUpdate(idsOf('cookies'), secrets), missing: idsOf('missing-secret') };
+  return {
+    accounts: accountsToUpdate([...idsOf('cookies'), ...idsOf('unclear')], secrets),
+    missing: idsOf('missing-secret'),
+  };
 }
 
 function required(name: string): string {

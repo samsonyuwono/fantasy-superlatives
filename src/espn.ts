@@ -175,18 +175,30 @@ export async function mapInBatches<T, R>(items: T[], size: number, fn: (item: T)
   return results;
 }
 
-/** A failed ESPN access check. `status` is ESPN's HTTP status, when the request got that far. */
+/**
+ * How an ESPN access check failed: ESPN answered with an HTTP error, couldn't be reached at all,
+ * or answered with something other than the league's settings.
+ */
+export type EspnFailure = 'rejected' | 'unreachable' | 'unreadable';
+
+/** A failed ESPN access check. `status` is ESPN's HTTP status, when it sent one. */
 export class EspnAccessError extends Error {
   constructor(
     message: string,
+    readonly failure: EspnFailure,
     readonly status?: number,
   ) {
     super(message);
     this.name = 'EspnAccessError';
   }
 
+  /** ESPN answers 401 or 403 when it rejects the cookies, e.g. because they expired. */
+  static isAuthStatus(status: number | undefined): boolean {
+    return status === 401 || status === 403;
+  }
+
   get isAuthFailure(): boolean {
-    return this.status === 401 || this.status === 403;
+    return EspnAccessError.isAuthStatus(this.status);
   }
 }
 
@@ -198,9 +210,15 @@ export function httpStatus(err: unknown): number | undefined {
   return typeof response.status === 'number' ? response.status : undefined;
 }
 
+/** True for an axios request error, as opposed to the library failing to read a response. */
+function isRequestError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'isAxiosError' in err && err.isAxiosError === true;
+}
+
 /**
  * Confirm ESPN will serve this league's settings with the configured cookies. Throws an
- * EspnAccessError when the request is rejected or comes back empty.
+ * EspnAccessError saying whether ESPN rejected the request, couldn't be reached, or sent
+ * something other than the settings.
  */
 export async function checkLeagueAccess(cfg: EspnConfig): Promise<void> {
   const where = `league ${cfg.leagueId} (season ${cfg.seasonYear})`;
@@ -209,12 +227,18 @@ export async function checkLeagueAccess(cfg: EspnConfig): Promise<void> {
     league = await makeClient(cfg).getLeagueInfo({ seasonId: cfg.seasonYear });
   } catch (err) {
     const status = httpStatus(err);
-    const message = err instanceof Error ? err.message : String(err);
-    const hint = status === 401 || status === 403 ? ' The espn_s2/SWID cookies may have expired.' : '';
-    throw new EspnAccessError(`ESPN rejected the request for ${where}: ${message}.${hint}`, status);
+    const detail = err instanceof Error ? err.message : String(err);
+    if (status !== undefined) {
+      const hint = EspnAccessError.isAuthStatus(status) ? ' The espn_s2/SWID cookies may have expired.' : '';
+      throw new EspnAccessError(`ESPN rejected the request for ${where}: ${detail}.${hint}`, 'rejected', status);
+    }
+    if (isRequestError(err)) {
+      throw new EspnAccessError(`Could not reach ESPN for ${where}: ${detail}.`, 'unreachable');
+    }
+    throw new EspnAccessError(`ESPN sent a response for ${where} that could not be read: ${detail}.`, 'unreadable');
   }
   if (!league?.rosterSettings) {
-    throw new EspnAccessError(`ESPN returned no settings for ${where}.`);
+    throw new EspnAccessError(`ESPN returned no settings for ${where}.`, 'unreadable');
   }
 }
 
