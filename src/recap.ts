@@ -86,17 +86,17 @@ async function runLeagueRecap(
     const week = args.week ?? completedWeek(league.seasonWeek1Tuesday, new Date());
 
     if (args.week === undefined && !isInSeason(week)) {
-      console.log(`[${league.id}] Week ${week} is outside the regular season (Weeks 1–14). Nothing to send.`);
+      console.info(`[${league.displayName}] Week ${week} is outside the regular season (Weeks 1–14). Nothing to send.`);
       return { leagueId: league.id, status: 'skipped' };
     }
 
-    console.log(`[${league.id}] Building the Week ${week} recap...`);
+    console.info(`[${league.displayName}] Building the Week ${week} recap...`);
     const espn = leagueFetcher(resolveEspnConfig(league, secrets));
     const { matchups } = await espn.week(week);
     if (matchups.length === 0) {
       throw new Error(`No matchups returned for Week ${week} — check the league ID, season, and cookies.`);
     }
-    console.log(`[${league.id}] Fetched ${matchups.length} matchups for Week ${week} of ${league.seasonYear}.`);
+    console.info(`[${league.displayName}] Fetched ${matchups.length} matchups for Week ${week} of ${league.seasonYear}.`);
 
     const teams = matchups.flatMap((m) => [m.home, m.away]);
     if (teams.every((t) => t.score === 0)) {
@@ -118,7 +118,7 @@ async function runLeagueRecap(
         leaderboard = buildLeaderboard([...earlierWeeks, { week, matchups }]);
       } catch (err) {
         leaderboardError = err instanceof Error ? err : new Error(String(err));
-        console.warn(`[${league.id}] Sending without the season leaderboard:`, leaderboardError.message);
+        console.warn(`[${league.displayName}] Sending without the season leaderboard:`, leaderboardError.message);
       }
     }
 
@@ -132,9 +132,9 @@ async function runLeagueRecap(
     const body = formatEmailBody(awards, roast, leaderboard);
 
     if (args.dryRun) {
-      console.log(`\n--- DRY RUN: ${league.displayName} (not sending) ---`);
-      console.log(`Subject: ${subject}\n`);
-      console.log(body);
+      console.info(`\n--- DRY RUN: ${league.displayName} (not sending) ---`);
+      console.info(`Subject: ${subject}\n`);
+      console.info(body);
       return { leagueId: league.id, status: 'skipped' };
     }
 
@@ -145,11 +145,11 @@ async function runLeagueRecap(
       subject,
       text: body,
     });
-    console.log(`[${league.id}] Sent the Week ${week} recap to ${league.recipientEmails.join(', ')}.`);
+    console.info(`[${league.displayName}] Sent the Week ${week} recap to ${league.recipientEmails.join(', ')}.`);
     return { leagueId: league.id, status: 'sent', leaderboardError };
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err));
-    console.error(`[${league.id}] Recap failed:`, error.message);
+    console.error(`[${league.displayName}] Recap failed:`, error.message);
     return { leagueId: league.id, status: 'failed', error };
   }
 }
@@ -168,7 +168,7 @@ async function main(): Promise<void> {
   const secrets = parseLeagueSecretsJson(required('LEAGUE_SECRETS_JSON'));
 
   if (leagues.length === 0) {
-    console.log('leagues.json has no leagues configured. Nothing to send.');
+    console.info('leagues.json has no leagues configured. Nothing to send.');
     return;
   }
 
@@ -179,6 +179,7 @@ async function main(): Promise<void> {
   );
 
   const { failed, exitCode } = summarize(results);
+  const leagueById = new Map(leagues.map((l) => [l.id, l]));
 
   if (!args.dryRun) {
     const runUrl = process.env.GITHUB_SERVER_URL && process.env.GITHUB_REPOSITORY && process.env.GITHUB_RUN_ID
@@ -187,27 +188,27 @@ async function main(): Promise<void> {
 
     const alertBase = { apiKey: shared.resendApiKey, from: shared.emailFrom, ownerEmail: shared.ownerAlertEmail, runUrl };
     const alertJobs = [
-      ...failed.map((r) => ({
-        leagueId: r.leagueId,
-        send: () => sendFailureAlert({ ...alertBase, leagueId: r.leagueId, error: r.error! }),
-      })),
+      ...failed.map((r) => {
+        const league = leagueById.get(r.leagueId)!;
+        return { league, send: () => sendFailureAlert({ ...alertBase, league, error: r.error! }) };
+      }),
       ...results
         .filter((r) => r.leaderboardError)
-        .map((r) => ({
-          leagueId: r.leagueId,
-          send: () => sendLeaderboardSkippedAlert({ ...alertBase, leagueId: r.leagueId, error: r.leaderboardError! }),
-        })),
+        .map((r) => {
+          const league = leagueById.get(r.leagueId)!;
+          return { league, send: () => sendLeaderboardSkippedAlert({ ...alertBase, league, error: r.leaderboardError! }) };
+        }),
     ];
 
     const alerts = await Promise.allSettled(alertJobs.map((job) => job.send()));
     alerts.forEach((a, i) => {
       if (a.status === 'rejected') {
-        console.error(`[${alertJobs[i]!.leagueId}] Alert did not send:`, a.reason);
+        console.error(`[${alertJobs[i]!.league.displayName}] Alert did not send:`, a.reason);
       }
     });
   }
 
-  console.log(`Done: ${results.length - failed.length}/${results.length} leagues succeeded.`);
+  console.info(`Done: ${results.length - failed.length}/${results.length} leagues succeeded.`);
   process.exitCode = exitCode;
 }
 

@@ -103,7 +103,10 @@ gh workflow run weekly-recap.yml -f week=4
 ```
 
 ESPN cookies expire from time to time. If a run fails on ESPN auth, refresh
-`LEAGUE_SECRETS_JSON` both locally and in GitHub. `keepalive.yml` pushes a small monthly commit so
+`LEAGUE_SECRETS_JSON` both locally and in GitHub. To catch this early, `cookie-check.yml` runs every
+Monday during the season (`src/cookie-check.ts`). It asks ESPN for each league's settings and sends
+one email to `OWNER_ALERT_EMAIL` listing any league that failed. Run it by hand with
+`npx tsx src/cookie-check.ts --dry-run --force`, or `gh workflow run cookie-check.yml -f force=true`. `keepalive.yml` pushes a small monthly commit so
 GitHub doesn't disable the scheduled workflow after 60 days of inactivity.
 
 ### The 9am ET trigger

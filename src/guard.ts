@@ -54,7 +54,7 @@ function main(): void {
       : [];
 
   const skip = shouldSkipFallback(eventName, recentRuns, new Date());
-  console.log(
+  console.info(
     skip
       ? `The 9am-triggered run already happened today (${newYorkDate(new Date())}). Skipping the fallback.`
       : `Proceeding with the recap (event: ${eventName || 'unknown'}).`,

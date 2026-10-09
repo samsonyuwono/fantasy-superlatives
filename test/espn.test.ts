@@ -1,12 +1,21 @@
 import { describe, it, expect, vi } from 'vitest';
-import { teamName, shouldSetCookies, lineupSlotsFromCounts, mapInBatches, withRetry, leagueFetcher } from '../src/espn.js';
+import { teamName, shouldSetCookies, lineupSlotsFromCounts, mapInBatches, withRetry, leagueFetcher, checkLeagueAccess, httpStatus, EspnAccessError } from '../src/espn.js';
 
-const calls = vi.hoisted(() => ({ boxscores: [] as number[], teams: [] as number[] }));
+const calls = vi.hoisted(() => ({
+  boxscores: [] as number[],
+  teams: [] as number[],
+  leagueInfo: 'ok' as 'ok' | 401 | 503 | 'empty',
+}));
 vi.mock('espn-fantasy-football-api/node', () => ({
   default: {
     Client: class {
       setCookies() {}
       async getLeagueInfo() {
+        if (typeof calls.leagueInfo === 'number') {
+          const status = calls.leagueInfo;
+          throw Object.assign(new Error(`Request failed with status code ${status}`), { response: { status } });
+        }
+        if (calls.leagueInfo === 'empty') return {};
         return { rosterSettings: { lineupPositionCount: { QB: 1 } } };
       }
       async getTeamsAtWeek({ scoringPeriodId }: { scoringPeriodId: number }) {
@@ -129,5 +138,58 @@ describe('leagueFetcher', () => {
     expect(earlier.map((w) => w.week)).toEqual([1, 2, 3]);
     expect(earlier[0]!.matchups[0]!.home.name).toBe('Team 1');
     expect(earlier[0]!.matchups[0]!.home.lineupSlots).toEqual(['QB']);
+  });
+});
+
+describe('httpStatus', () => {
+  it('reads the status from an axios-style error', () => {
+    expect(httpStatus(Object.assign(new Error('x'), { response: { status: 401 } }))).toBe(401);
+  });
+
+  it('returns undefined when there is no response status', () => {
+    expect(httpStatus(new Error('network down'))).toBeUndefined();
+    expect(httpStatus({ response: { status: '401' } })).toBeUndefined();
+    expect(httpStatus(null)).toBeUndefined();
+  });
+});
+
+describe('checkLeagueAccess', () => {
+  const cfg = { leagueId: 123, seasonYear: 2026, espnS2: 's2', swid: '{swid}' };
+  const failure = async () => {
+    try {
+      await checkLeagueAccess(cfg);
+    } catch (err) {
+      return err;
+    } finally {
+      calls.leagueInfo = 'ok';
+    }
+    throw new Error('expected checkLeagueAccess to reject');
+  };
+
+  it('resolves when ESPN returns the league settings', async () => {
+    calls.leagueInfo = 'ok';
+    await expect(checkLeagueAccess(cfg)).resolves.toBeUndefined();
+  });
+
+  it('marks a 401 as an auth failure, with a cookie hint', async () => {
+    calls.leagueInfo = 401;
+    const err = await failure();
+    expect(err).toBeInstanceOf(EspnAccessError);
+    expect(err).toMatchObject({ status: 401, isAuthFailure: true });
+    expect(String(err)).toMatch(/league 123.*401.*cookies may have expired/);
+  });
+
+  it('does not blame the cookies for a server error', async () => {
+    calls.leagueInfo = 503;
+    const err = await failure();
+    expect(err).toMatchObject({ status: 503, isAuthFailure: false });
+    expect(String(err)).not.toContain('cookies');
+  });
+
+  it('rejects without a status when ESPN returns no settings', async () => {
+    calls.leagueInfo = 'empty';
+    const err = await failure();
+    expect(err).toMatchObject({ status: undefined, isAuthFailure: false });
+    expect(String(err)).toMatch(/no settings for league 123/);
   });
 });

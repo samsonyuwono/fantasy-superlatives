@@ -1,0 +1,66 @@
+name: ESPN Cookie Check
+
+# Every Monday, confirm ESPN still accepts each league's cookies so an expiry is caught a day
+# before Tuesday's recap. GitHub's cron can start hours late, which is fine for a day-ahead warning.
+# The script only checks leagues with a Weeks 1–14 recap due the next day (see src/cookie-check.ts).
+on:
+  schedule:
+    - cron: '0 12 * * 1'
+      timezone: 'America/New_York'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Check every league, even outside the season'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # Failed leagues are alerted from inside cookie-check.ts, in one email to OWNER_ALERT_EMAIL.
+      - id: check
+        name: Check ESPN access for each league
+        run: |
+          if [ "${{ inputs.force }}" = "true" ]; then
+            npx tsx src/cookie-check.ts --force
+          else
+            npx tsx src/cookie-check.ts
+          fi
+        env:
+          LEAGUE_SECRETS_JSON: ${{ secrets.LEAGUE_SECRETS_JSON }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          OWNER_ALERT_EMAIL: ${{ secrets.OWNER_ALERT_EMAIL }}
+
+      # Last-resort net for a crash before the script could send its alert (e.g. `npm ci` failing).
+      # The script exits 1 when a league fails too, so skip this when it already alerted.
+      - name: Email me if the whole job crashed
+        if: failure() && steps.check.outputs.alerted != 'true'
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          OWNER_ALERT_EMAIL: ${{ secrets.OWNER_ALERT_EMAIL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -sS -X POST https://api.resend.com/emails \
+            -H "Authorization: Bearer $RESEND_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg from "${EMAIL_FROM:-onboarding@resend.dev}" \
+              --arg to "$OWNER_ALERT_EMAIL" \
+              --arg url "$RUN_URL" \
+              '{from:$from, to:$to, subject:"⚠️ ESPN cookie check CRASHED",
+                text:("The Monday ESPN cookie check crashed before it could send its alert. Check the run logs:\n" + $url)}')"
