@@ -44,7 +44,7 @@ const leaderboard: SeasonLeaderboard = {
 describe('factSheet', () => {
   it('lists every matchup result, including ties', () => {
     const sheet = factSheet(awards);
-    expect(sheet).toContain('Matchup results:\n- Bravo beat Alpha, 120.0–110.0\n- Charlie beat Jurong FC, 70.0–60.0\n- Delta and Echo tied at 80.0');
+    expect(sheet).toContain('Matchup results:\n- Bravo beat Alpha, 120.0–110.0 (by 10.0)\n- Charlie beat Jurong FC, 70.0–60.0 (by 10.0)\n- Delta and Echo tied at 80.0');
   });
 
   it('says when the Sleepwalker still won, so the bench did not cost them', () => {
@@ -61,6 +61,13 @@ describe('factSheet', () => {
     };
     expect(factSheet({ ...awards, bonehead })).toContain(
       'Alpha lost 110.0–120.0 to Bravo, and with the right start/sit they would have won.',
+    );
+  });
+
+  it('says when a tie would have happened anyway', () => {
+    const sleepwalker = { ...awards.sleepwalker, matchup: { result: 'tied' as const, score: 80, opponent: 'Echo', opponentScore: 80, flipped: false } };
+    expect(factSheet({ ...awards, sleepwalker })).toContain(
+      "Delta tied Echo at 80.0, so the points left on the bench didn't cost them the win.",
     );
   });
 
@@ -143,9 +150,9 @@ describe('runPipeline', () => {
     expect(agents.checker).toHaveBeenCalledTimes(1);
     expect(agents.writer).toHaveBeenLastCalledWith(sheet, expect.any(Array), {
       draft: BAD_DRAFT,
-      issues: ["The number 999.9 isn't in the fact sheet."],
+      issues: ["The number 999.9 isn't in the fact sheet. Use a number from the sheet or cut it."],
     });
-    expect(result.trace).toContain('draft 1 rejected (code: "The number 999.9 isn\'t in the fact sheet.")');
+    expect(result.trace).toContain('draft 1 rejected (code: "The number 999.9 isn\'t in the fact sheet.');
   });
 
   it('revises after the checker rejects a draft', async () => {
@@ -176,12 +183,22 @@ describe('runPipeline', () => {
     expect(result.trace).toContain('analyst failed (overloaded)');
   });
 
-  it('stops when the writer fails', async () => {
+  it('moves on to the next attempt when the writer or checker fails', async () => {
     const agents = fakeAgents([GOOD_DRAFT]);
     agents.writer.mockRejectedValueOnce(new Error('timeout'));
+    agents.checker.mockRejectedValueOnce(new Error('overloaded'));
+    const result = await runPipeline(sheet, agents);
+    expect(result.roast).toBe(GOOD_DRAFT);
+    expect(result.trace).toContain('draft 1 failed (timeout), draft 2 failed (overloaded), draft 3 approved');
+  });
+
+  it('gives up when every attempt fails', async () => {
+    const agents = fakeAgents([GOOD_DRAFT]);
+    agents.writer.mockRejectedValue(new Error('down'));
     const result = await runPipeline(sheet, agents);
     expect(result.roast).toBeNull();
-    expect(result.trace).toContain('draft 1 failed (timeout)');
+    expect(agents.writer).toHaveBeenCalledTimes(MAX_ATTEMPTS);
+    expect(result.trace).toContain('gave up');
   });
 });
 
@@ -197,8 +214,18 @@ describe('generateRoast', () => {
   it('shadow: sends the single-call roast and logs the approved pipeline roast', async () => {
     const deps = fakeDeps(fakeAgents([GOOD_DRAFT]));
     expect(await generateRoast(awards, opts('shadow'), undefined, deps)).toBe('legacy roast');
-    expect(deps.log).toHaveBeenCalledWith(expect.stringContaining('[shadow] roast: analyst ok'));
-    expect(deps.log).toHaveBeenCalledWith(`[shadow] Pipeline roast (not sent):\n${GOOD_DRAFT}`);
+    await vi.waitFor(() => {
+      expect(deps.log).toHaveBeenCalledWith(expect.stringContaining('[shadow] roast: analyst ok'));
+      expect(deps.log).toHaveBeenCalledWith(`[shadow] Pipeline roast (not sent):\n${GOOD_DRAFT}`);
+    });
+  });
+
+  it('shadow: sends without waiting for the pipeline to finish', async () => {
+    const agents = fakeAgents([GOOD_DRAFT]);
+    agents.analyst.mockReturnValue(new Promise<string[]>(() => {}));
+    const deps = fakeDeps(agents);
+    expect(await generateRoast(awards, opts('shadow'), undefined, deps)).toBe('legacy roast');
+    expect(deps.log).not.toHaveBeenCalled();
   });
 
   it('shadow: still sends when the pipeline fails', async () => {

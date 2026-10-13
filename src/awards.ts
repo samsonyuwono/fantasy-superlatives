@@ -255,11 +255,11 @@ function computeLuck(
   return { backedIntoIt, robbed };
 }
 
-/** How `teamId`'s matchup went, and whether `missedPoints` more would have changed the result. */
+/** How `teamId`'s matchup went, and whether `fixedScore` (their score without the mistake) would have won it. */
 export function matchupOutcome(
   matchups: NormalizedMatchup[],
   teamId: number | undefined,
-  missedPoints: number,
+  fixedScore: (score: number) => number,
 ): MatchupOutcome | undefined {
   for (const m of matchups) {
     const [team, opp] = m.home.teamId === teamId ? [m.home, m.away] : m.away.teamId === teamId ? [m.away, m.home] : [];
@@ -270,7 +270,7 @@ export function matchupOutcome(
       score: team.score,
       opponent: opp.name,
       opponentScore: opp.score,
-      flipped: result !== 'won' && team.score + missedPoints > opp.score,
+      flipped: result !== 'won' && fixedScore(team.score) > opp.score,
     };
   }
   return undefined;
@@ -288,8 +288,9 @@ export function computeAwards(matchups: NormalizedMatchup[], week: number): Week
     juggernaut: computeJuggernaut(teams),
     corpse: computeCorpse(teams),
     ballerOfTheWeek: computeBaller(teams),
-    sleepwalker: { ...sleepwalker, matchup: matchupOutcome(matchups, sleepwalker.teamId, sleepwalker.pointsLeft) },
-    bonehead: { ...bonehead, matchup: matchupOutcome(matchups, bonehead.teamId, bonehead.regret) },
+    // Uses `optimal`, the number the fact sheet shows, even if ESPN's team score differs from the starters' sum.
+    sleepwalker: { ...sleepwalker, matchup: matchupOutcome(matchups, sleepwalker.teamId, () => sleepwalker.optimal) },
+    bonehead: { ...bonehead, matchup: matchupOutcome(matchups, bonehead.teamId, (score) => score + bonehead.regret) },
     backedIntoIt,
     robbed,
   };

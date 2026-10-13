@@ -19,11 +19,11 @@ describe('verifyDraft', () => {
   });
 
   it('flags a number that is not in the sheet', () => {
-    expect(verifyDraft(`Bravo dropped 134.5! ${allAwards}`, sheet)).toEqual(["The number 134.5 isn't in the fact sheet."]);
+    expect(verifyDraft(`Bravo dropped 134.5! ${allAwards}`, sheet)).toEqual(["The number 134.5 isn't in the fact sheet. Use a number from the sheet or cut it."]);
   });
 
   it('flags a wrong decimal even when it is close', () => {
-    expect(verifyDraft(`Jurong FC scored 87.9. ${allAwards}`, sheet)).toEqual(["The number 87.9 isn't in the fact sheet."]);
+    expect(verifyDraft(`Jurong FC scored 87.9. ${allAwards}`, sheet)).toEqual(["The number 87.9 isn't in the fact sheet. Use a number from the sheet or cut it."]);
   });
 
   it('accepts whole numbers that round or drop the decimal', () => {
@@ -35,11 +35,20 @@ describe('verifyDraft', () => {
   });
 
   it('reports each unknown number once', () => {
-    expect(verifyDraft(`99 points, yes 99. ${allAwards}`, sheet)).toEqual(["The number 99 isn't in the fact sheet."]);
+    expect(verifyDraft(`99 points, yes 99. ${allAwards}`, sheet)).toEqual(["The number 99 isn't in the fact sheet. Use a number from the sheet or cut it."]);
   });
 
-  it('flags missing awards, ignoring case', () => {
-    const draft = 'the juggernaut, The Corpse, Baller of the Week, The Sleepwalker, The Bonehead and Robbed.';
-    expect(verifyDraft(draft, sheet)).toEqual(['The award "Backed Into It" is missing.']);
+  it('flags missing awards', () => {
+    const draft = 'The Juggernaut, The Corpse, Baller of the Week, The Sleepwalker, The Bonehead and Robbed.';
+    expect(verifyDraft(draft, sheet)).toEqual(['The award "Backed Into It" is missing. Name it as written, in title case.']);
+  });
+
+  it('accepts an award name without its leading "The"', () => {
+    expect(verifyDraft(`Bravo, this week's Juggernaut. ${allAwards}`.replace('The Juggernaut, ', ''), sheet)).toEqual([]);
+  });
+
+  it('does not count the verb "robbed" as the Robbed award', () => {
+    const draft = `${allAwards.replace(' and Robbed', '')} Echo got robbed by the refs.`;
+    expect(verifyDraft(draft, sheet)).toEqual(['The award "Robbed" is missing. Name it as written, in title case.']);
   });
 });

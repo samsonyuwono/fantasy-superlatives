@@ -52,7 +52,7 @@ function outcomeText(team: string, m: MatchupOutcome | undefined, { what, fix }:
   if (m.result === 'tied') {
     return m.flipped
       ? ` ${team} tied ${m.opponent} at ${n(m.score)}, and with ${fix} they would have won.`
-      : ` ${team} tied ${m.opponent} at ${n(m.score)}.`;
+      : ` ${team} tied ${m.opponent} at ${n(m.score)}, so ${what} didn't cost them the win.`;
   }
   return m.flipped
     ? ` ${team} lost ${vs} to ${m.opponent}, and with ${fix} they would have won.`
@@ -62,7 +62,7 @@ function outcomeText(team: string, m: MatchupOutcome | undefined, { what, fix }:
 function resultLine(r: MatchupResult): string {
   if (r.homeScore === r.awayScore) return `- ${r.home} and ${r.away} tied at ${n(r.homeScore)}`;
   const [w, ws, l, ls] = r.homeScore > r.awayScore ? [r.home, r.homeScore, r.away, r.awayScore] : [r.away, r.awayScore, r.home, r.homeScore];
-  return `- ${w} beat ${l}, ${n(ws)}–${n(ls)}`;
+  return `- ${w} beat ${l}, ${n(ws)}–${n(ls)} (by ${n(ws - ls)})`;
 }
 
 /** A compact, unambiguous fact sheet for the model — no room to hallucinate the numbers. */
@@ -128,7 +128,8 @@ export interface PipelineResult {
 
 /**
  * Runs analyst → writer → code check → Claude checker, sending rejected drafts back to the writer
- * with the issues. Never throws: a failing agent ends the run with `roast: null`.
+ * with the issues. Never throws: a failing writer or checker call uses up that attempt, and the run
+ * ends with `roast: null` once every attempt is used.
  */
 export async function runPipeline(sheet: string, agents: Agents): Promise<PipelineResult> {
   const steps: string[] = [];
@@ -167,7 +168,6 @@ export async function runPipeline(sheet: string, agents: Agents): Promise<Pipeli
       revision = { draft, issues: verdict.issues.length > 0 ? verdict.issues : ['The checker rejected the draft.'] };
     } catch (err) {
       steps.push(`draft ${attempt} failed (${errorMessage(err)})`);
-      return done(null);
     }
   }
   steps.push('gave up');
@@ -215,15 +215,16 @@ export async function generateRoast(
   if (mode === 'off') return deps.legacy(sheet);
 
   if (mode === 'shadow') {
-    const [legacy, pipeline] = await Promise.allSettled([deps.legacy(sheet), runPipeline(sheet, deps.agents)]);
-    if (pipeline.status === 'fulfilled') {
-      deps.log(`[shadow] ${pipeline.value.trace}`);
-      if (pipeline.value.roast) deps.log(`[shadow] Pipeline roast (not sent):\n${pipeline.value.roast}`);
-    } else {
-      deps.log(`[shadow] pipeline crashed: ${errorMessage(pipeline.reason)}`);
-    }
-    if (legacy.status === 'rejected') throw legacy.reason;
-    return legacy.value;
+    // Not awaited, so a slow pipeline never delays the send. It logs whenever it finishes, and the
+    // process stays alive until then.
+    void runPipeline(sheet, deps.agents).then(
+      ({ roast, trace }) => {
+        deps.log(`[shadow] ${trace}`);
+        if (roast) deps.log(`[shadow] Pipeline roast (not sent):\n${roast}`);
+      },
+      (err: unknown) => deps.log(`[shadow] pipeline crashed: ${errorMessage(err)}`),
+    );
+    return deps.legacy(sheet);
   }
 
   const { roast, trace } = await runPipeline(sheet, deps.agents);

@@ -5,9 +5,12 @@
 import { SEASON_AWARD_NAMES } from './leaderboard.js';
 
 const AWARD_NAMES = [...Object.values(SEASON_AWARD_NAMES), 'Baller of the Week'];
+// Matched in title case as whole words, so the verb "robbed" doesn't count as the Robbed award.
+// A leading "The" is optional: "this week's Juggernaut" names The Juggernaut.
+const AWARD_PATTERNS = AWARD_NAMES.map((name) => ({ name, pattern: new RegExp(`\\b${name.replace(/^The /, '')}\\b`) }));
 const NUMBER = /\d+(?:\.\d+)?/g;
 // Small counts ("2 teams", "Week 5", "3rd") read naturally and can't hide a wrong score.
-const MAX_FREE_NUMBER = 10;
+export const MAX_FREE_NUMBER = 10;
 
 /** Whether a draft number matches a sheet number. A whole number may round or drop the decimal ("88" or "87" for 87.6). */
 function matches(raw: string, sheetValue: number): boolean {
@@ -30,11 +33,10 @@ export function verifyDraft(draft: string, sheet: string): string[] {
     if (Number(raw) <= MAX_FREE_NUMBER) continue;
     if (!allowed.some((a) => matches(raw, a))) unknown.add(raw);
   }
-  for (const raw of unknown) issues.push(`The number ${raw} isn't in the fact sheet.`);
+  for (const raw of unknown) issues.push(`The number ${raw} isn't in the fact sheet. Use a number from the sheet or cut it.`);
 
-  const lower = draft.toLowerCase();
-  for (const name of AWARD_NAMES) {
-    if (!lower.includes(name.toLowerCase())) issues.push(`The award "${name}" is missing.`);
+  for (const { name, pattern } of AWARD_PATTERNS) {
+    if (!pattern.test(draft)) issues.push(`The award "${name}" is missing. Name it as written, in title case.`);
   }
 
   return issues;

@@ -175,6 +175,14 @@ describe('matchup results and outcomes', () => {
     expect(won.sleepwalker.matchup).toEqual({ result: 'won', score: 50, opponent: 'Bravo', opponentScore: 40, flipped: false });
   });
 
+  it("judges the Sleepwalker by the optimal score on the sheet, not ESPN's team score", () => {
+    // ESPN says 51 but the starters add up to 50, so optimal is 70: short of Bravo's 70.5.
+    const espnAlpha = { ...alpha, score: 51 };
+    const closeBravo = { ...bravo, score: 70.5 };
+    const close = computeAwards([{ home: espnAlpha, away: closeBravo }, { home: charlie, away: delta }], 3);
+    expect(close.sleepwalker).toMatchObject({ optimal: 70, matchup: { result: 'lost', flipped: false } });
+  });
+
   it('flags a tie the missed points would have won', () => {
     const tiedBravo = { ...bravo, score: 50 };
     const tied = computeAwards([{ home: alpha, away: tiedBravo }, { home: charlie, away: delta }], 3);

@@ -4,6 +4,7 @@
  */
 import Anthropic from '@anthropic-ai/sdk';
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema';
+import { MAX_FREE_NUMBER } from './factcheck.js';
 
 export interface Revision {
   draft: string;
@@ -31,6 +32,7 @@ Constraints:
 - Mention every award, using its exact name (e.g. "The Juggernaut", "The Bonehead").
 - Write award names in normal title case (e.g. "Baller of the Week"), never in all caps.
 - Use the exact team names, player names, and point totals from the fact sheet. Never invent numbers or winners.
+- Every number above ${MAX_FREE_NUMBER} must come from the fact sheet, as written or rounded to a whole number. Don't do your own math (the sheet has the margins), and no percentages, years or other stats.
 - Only say a bench or start/sit mistake cost a team the game when the fact sheet says so. If they still won, roast them for getting away with it.
 - If the fact sheet has a "Season so far" section, you may add a callback or two about it (e.g. a team's third Corpse). Keep the focus on this week, and only use season counts that appear in the sheet.
 - Plain text suitable for pasting into WhatsApp. A few emojis are fine. No markdown headings, no bullet characters like "*".`;
