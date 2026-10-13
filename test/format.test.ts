@@ -15,10 +15,14 @@ describe('formatSubject', () => {
 
 const awards: WeekAwards = {
   week: 5,
+  results: [],
   juggernaut: { team: 'Bravo', teamId: 2, score: 120 },
   corpse: { team: 'Jurong FC', teamId: 4, score: 60 },
   ballerOfTheWeek: { team: 'Alpha', player: 'Puka Nacua', points: 31 },
-  sleepwalker: { team: 'Delta', teamId: 3, pointsLeft: 40, actual: 80, optimal: 120 },
+  sleepwalker: {
+    team: 'Delta', teamId: 3, pointsLeft: 40, actual: 80, optimal: 120,
+    matchup: { result: 'won', score: 80, opponent: 'Echo', opponentScore: 75, flipped: false },
+  },
   bonehead: { team: 'Alpha', teamId: 1, benched: 'A', benchedPoints: 20, started: 'B', startedPoints: 2, slot: 'WR', regret: 18 },
   backedIntoIt: { team: 'Charlie', teamId: 5, score: 70, allPlayWinPct: 0.2, allPlay: { beaten: 2, tied: 0, opponents: 9 } },
   robbed: { team: 'Alpha', teamId: 1, score: 110, allPlayWinPct: 0.75, allPlay: { beaten: 6, tied: 1, opponents: 9 } },

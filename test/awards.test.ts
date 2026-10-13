@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeAwards, optimalLineupPoints } from '../src/awards.js';
+import { computeAwards, matchupOutcome, optimalLineupPoints } from '../src/awards.js';
 import type { NormalizedMatchup, NormalizedPlayer, NormalizedTeam } from '../src/awards.js';
 
 /**
@@ -143,6 +143,64 @@ describe('computeAwards', () => {
     expect(awards.bonehead.teamId).toBe(1);
     expect(awards.backedIntoIt.teamId).toBe(3);
     expect(awards.robbed.teamId).toBe(1);
+  });
+});
+
+describe('matchup results and outcomes', () => {
+  const awards = computeAwards(matchups, 3);
+
+  it('lists every matchup result', () => {
+    expect(awards.results).toEqual([
+      { home: 'Alpha', homeScore: 50, away: 'Bravo', awayScore: 82 },
+      { home: 'Charlie', homeScore: 47, away: 'Delta', awayScore: 26 },
+    ]);
+  });
+
+  it('says Alpha lost, and would have lost even with the optimal lineup (70 < 82)', () => {
+    const lost = { result: 'lost', score: 50, opponent: 'Bravo', opponentScore: 82, flipped: false };
+    expect(awards.sleepwalker.matchup).toEqual(lost);
+    expect(awards.bonehead.matchup).toEqual(lost);
+  });
+
+  it('flags a loss the missed points would have won', () => {
+    const closeBravo = { ...bravo, score: 60 };
+    const close = computeAwards([{ home: alpha, away: closeBravo }, { home: charlie, away: delta }], 3);
+    expect(close.sleepwalker.matchup).toMatchObject({ result: 'lost', flipped: true });
+    expect(close.bonehead.matchup).toMatchObject({ result: 'lost', flipped: true });
+  });
+
+  it('never flags a win as flipped', () => {
+    const weakBravo = { ...bravo, score: 40 };
+    const won = computeAwards([{ home: alpha, away: weakBravo }, { home: charlie, away: delta }], 3);
+    expect(won.sleepwalker.matchup).toEqual({ result: 'won', score: 50, opponent: 'Bravo', opponentScore: 40, flipped: false });
+  });
+
+  it("judges the Sleepwalker by the optimal score on the sheet, not ESPN's team score", () => {
+    // ESPN says 51 but the starters add up to 50, so optimal is 70: short of Bravo's 70.5.
+    const espnAlpha = { ...alpha, score: 51 };
+    const closeBravo = { ...bravo, score: 70.5 };
+    const close = computeAwards([{ home: espnAlpha, away: closeBravo }, { home: charlie, away: delta }], 3);
+    expect(close.sleepwalker).toMatchObject({ optimal: 70, matchup: { result: 'lost', flipped: false } });
+  });
+
+  it('flags a tie the missed points would have won', () => {
+    const tiedBravo = { ...bravo, score: 50 };
+    const tied = computeAwards([{ home: alpha, away: tiedBravo }, { home: charlie, away: delta }], 3);
+    expect(tied.sleepwalker.matchup).toMatchObject({ result: 'tied', flipped: true });
+  });
+});
+
+describe('matchupOutcome', () => {
+  it('throws for a team that is not in any matchup, since that would be a bug', () => {
+    expect(() => matchupOutcome(matchups, 99, (score) => score)).toThrow("Team 99 isn't in any matchup this week.");
+  });
+
+  it('leaves the Bonehead without a matchup when nobody blundered', () => {
+    const noBench = (t: NormalizedTeam): NormalizedTeam => ({ ...t, players: t.players.filter((pl) => pl.slot !== 'Bench') });
+    const awards = computeAwards([{ home: noBench(alpha), away: noBench(bravo) }], 3);
+    expect(awards.bonehead.teamId).toBeUndefined();
+    expect(awards.bonehead.matchup).toBeUndefined();
+    expect(awards.sleepwalker.matchup).toBeDefined();
   });
 });
 

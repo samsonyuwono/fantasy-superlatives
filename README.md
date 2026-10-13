@@ -31,7 +31,11 @@ leagues.json ─► for each league: ESPN box scores ─► awards.ts ─► Cla
 - `src/espn.ts`: fetches and normalizes one week from ESPN, including each league's own lineup slots.
 - `src/awards.ts`: pure, unit-tested award logic (no network).
 - `src/leaderboard.ts`: tallies the awards over Weeks 1..N, which are fetched again on each run since nothing is stored. If an earlier week won't load, the recap goes out without it and `OWNER_ALERT_EMAIL` gets a note.
-- `src/roast.ts`: Claude writes the prose from a fixed fact sheet, so it can't invent numbers.
+- `src/roast.ts`: Claude writes the prose from a fixed fact sheet. `ROAST_PIPELINE` picks how:
+  - `off`: one Claude call.
+  - `shadow` (the default): sends that one call's roast, and also runs the pipeline below and logs what it would have sent.
+  - `on`: the pipeline. An analyst picks storylines, a writer drafts, and each draft must pass a code check (`src/factcheck.ts`: every number is in the fact sheet and every award is named) and a Claude checker (`src/agents.ts`). A rejected draft goes back to the writer with the issues, up to 3 drafts. If all fail, the single-call roast is sent.
+  In CI it's a repo variable: `gh variable set ROAST_PIPELINE --body on`, or `off` to roll back.
 - `src/format.ts` / `src/emailer.ts`: build the plain-text body and send it via Resend.
 - `src/week.ts`: works out the week from each league's `seasonWeek1Tuesday` and enforces the Weeks 1–14 gate.
 - `src/guard.ts`: stops the fallback schedule from sending twice (see [the 9am trigger](#the-9am-et-trigger)).

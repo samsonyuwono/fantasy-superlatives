@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path';
 import { computeAwards } from './awards.js';
 import { EspnAccessError, httpStatus, leagueFetcher } from './espn.js';
 import { buildLeaderboard, type SeasonLeaderboard } from './leaderboard.js';
-import { generateRoast } from './roast.js';
+import { generateRoast, parsePipelineMode, type PipelineMode } from './roast.js';
 import { formatEmailBody, formatSubject } from './format.js';
 import { sendRecap, sendFailureAlert, sendLeaderboardSkippedAlert, type SecretFixes } from './emailer.js';
 import { completedWeek, isInSeason } from './week.js';
@@ -41,6 +41,7 @@ interface Args {
 interface SharedConfig {
   anthropicApiKey: string;
   anthropicModel: string;
+  roastPipeline: PipelineMode;
   resendApiKey: string;
   emailFrom: string;
   ownerAlertEmail: string;
@@ -71,6 +72,7 @@ function loadSharedConfig(): SharedConfig {
   return {
     anthropicApiKey: required('ANTHROPIC_API_KEY'),
     anthropicModel: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5',
+    roastPipeline: parsePipelineMode(process.env.ROAST_PIPELINE),
     resendApiKey: required('RESEND_API_KEY'),
     emailFrom: process.env.EMAIL_FROM || 'onboarding@resend.dev',
     ownerAlertEmail: required('OWNER_ALERT_EMAIL'),
@@ -126,7 +128,12 @@ async function runLeagueRecap(
 
     const roast = await generateRoast(
       awards,
-      { apiKey: shared.anthropicApiKey, model: shared.anthropicModel },
+      {
+        apiKey: shared.anthropicApiKey,
+        model: shared.anthropicModel,
+        pipeline: shared.roastPipeline,
+        league: league.displayName,
+      },
       leaderboard,
     );
 
