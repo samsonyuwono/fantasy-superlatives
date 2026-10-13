@@ -41,12 +41,33 @@ export interface AllPlayRecord {
  * mid-season. It's optional only where an award can be an empty placeholder (no Bonehead
  * swap, no decided matchups).
  */
+/** One matchup's final score. */
+export interface MatchupResult {
+  home: string;
+  homeScore: number;
+  away: string;
+  awayScore: number;
+}
+
+/**
+ * How an award winner's own matchup went, so the roast can't claim a bench mistake cost a game
+ * that was won anyway. `flipped` is whether the points they missed would have changed the result.
+ */
+export interface MatchupOutcome {
+  result: 'won' | 'lost' | 'tied';
+  score: number;
+  opponent: string;
+  opponentScore: number;
+  flipped: boolean;
+}
+
 export interface WeekAwards {
   week: number;
+  results: MatchupResult[];
   juggernaut: { team: string; teamId: number; score: number };
   corpse: { team: string; teamId: number; score: number };
   ballerOfTheWeek: { team: string; player: string; points: number };
-  sleepwalker: { team: string; teamId: number; pointsLeft: number; actual: number; optimal: number };
+  sleepwalker: { team: string; teamId: number; pointsLeft: number; actual: number; optimal: number; matchup?: MatchupOutcome };
   bonehead: {
     team: string;
     teamId?: number;
@@ -56,6 +77,7 @@ export interface WeekAwards {
     startedPoints: number;
     slot: string;
     regret: number;
+    matchup?: MatchupOutcome;
   };
   backedIntoIt: { team: string; teamId?: number; score: number; allPlayWinPct: number; allPlay: AllPlayRecord };
   robbed: { team: string; teamId?: number; score: number; allPlayWinPct: number; allPlay: AllPlayRecord };
@@ -233,17 +255,41 @@ function computeLuck(
   return { backedIntoIt, robbed };
 }
 
+/** How `teamId`'s matchup went, and whether `missedPoints` more would have changed the result. */
+export function matchupOutcome(
+  matchups: NormalizedMatchup[],
+  teamId: number | undefined,
+  missedPoints: number,
+): MatchupOutcome | undefined {
+  for (const m of matchups) {
+    const [team, opp] = m.home.teamId === teamId ? [m.home, m.away] : m.away.teamId === teamId ? [m.away, m.home] : [];
+    if (!team || !opp) continue;
+    const result = team.score > opp.score ? 'won' : team.score < opp.score ? 'lost' : 'tied';
+    return {
+      result,
+      score: team.score,
+      opponent: opp.name,
+      opponentScore: opp.score,
+      flipped: result !== 'won' && team.score + missedPoints > opp.score,
+    };
+  }
+  return undefined;
+}
+
 /** Compute all seven awards for one week from its normalized matchups. */
 export function computeAwards(matchups: NormalizedMatchup[], week: number): WeekAwards {
   const teams = allTeams(matchups);
   const { backedIntoIt, robbed } = computeLuck(matchups, teams);
+  const sleepwalker = computeSleepwalker(teams);
+  const bonehead = computeBonehead(teams);
   return {
     week,
+    results: matchups.map((m) => ({ home: m.home.name, homeScore: m.home.score, away: m.away.name, awayScore: m.away.score })),
     juggernaut: computeJuggernaut(teams),
     corpse: computeCorpse(teams),
     ballerOfTheWeek: computeBaller(teams),
-    sleepwalker: computeSleepwalker(teams),
-    bonehead: computeBonehead(teams),
+    sleepwalker: { ...sleepwalker, matchup: matchupOutcome(matchups, sleepwalker.teamId, sleepwalker.pointsLeft) },
+    bonehead: { ...bonehead, matchup: matchupOutcome(matchups, bonehead.teamId, bonehead.regret) },
     backedIntoIt,
     robbed,
   };

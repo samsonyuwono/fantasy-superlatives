@@ -15,6 +15,7 @@ describe('formatSubject', () => {
 
 const awards: WeekAwards = {
   week: 5,
+  results: [],
   juggernaut: { team: 'Bravo', teamId: 2, score: 120 },
   corpse: { team: 'Jurong FC', teamId: 4, score: 60 },
   ballerOfTheWeek: { team: 'Alpha', player: 'Puka Nacua', points: 31 },

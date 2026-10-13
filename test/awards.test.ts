@@ -146,6 +146,42 @@ describe('computeAwards', () => {
   });
 });
 
+describe('matchup results and outcomes', () => {
+  const awards = computeAwards(matchups, 3);
+
+  it('lists every matchup result', () => {
+    expect(awards.results).toEqual([
+      { home: 'Alpha', homeScore: 50, away: 'Bravo', awayScore: 82 },
+      { home: 'Charlie', homeScore: 47, away: 'Delta', awayScore: 26 },
+    ]);
+  });
+
+  it('says Alpha lost, and would have lost even with the optimal lineup (70 < 82)', () => {
+    const lost = { result: 'lost', score: 50, opponent: 'Bravo', opponentScore: 82, flipped: false };
+    expect(awards.sleepwalker.matchup).toEqual(lost);
+    expect(awards.bonehead.matchup).toEqual(lost);
+  });
+
+  it('flags a loss the missed points would have won', () => {
+    const closeBravo = { ...bravo, score: 60 };
+    const close = computeAwards([{ home: alpha, away: closeBravo }, { home: charlie, away: delta }], 3);
+    expect(close.sleepwalker.matchup).toMatchObject({ result: 'lost', flipped: true });
+    expect(close.bonehead.matchup).toMatchObject({ result: 'lost', flipped: true });
+  });
+
+  it('never flags a win as flipped', () => {
+    const weakBravo = { ...bravo, score: 40 };
+    const won = computeAwards([{ home: alpha, away: weakBravo }, { home: charlie, away: delta }], 3);
+    expect(won.sleepwalker.matchup).toEqual({ result: 'won', score: 50, opponent: 'Bravo', opponentScore: 40, flipped: false });
+  });
+
+  it('flags a tie the missed points would have won', () => {
+    const tiedBravo = { ...bravo, score: 50 };
+    const tied = computeAwards([{ home: alpha, away: tiedBravo }, { home: charlie, away: delta }], 3);
+    expect(tied.sleepwalker.matchup).toMatchObject({ result: 'tied', flipped: true });
+  });
+});
+
 describe('weeks with no decided matchups (e.g. no scores yet)', () => {
   const tieTeam = (id: number, name: string): NormalizedTeam => ({
     teamId: id,

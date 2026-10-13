@@ -4,7 +4,7 @@ Personal project. Every Tuesday it emails a recap of the past NFL week for each 
 
 ## Map
 - `src/recap.ts`: the entrypoint. Runs each league in `leagues.json` independently; one league failing never blocks another, and each failure emails `OWNER_ALERT_EMAIL`.
-- Pipeline: `espn.ts` (the only module that talks to ESPN) → `awards.ts` (pure logic) → `leaderboard.ts` (season tally; there's no storage, so each run fetches Weeks 1..N again, and a failure here sends the recap without it) → `roast.ts` (Claude writes prose from a fixed fact sheet, so it can't invent numbers) → `format.ts` / `emailer.ts` (Resend).
+- Pipeline: `espn.ts` (the only module that talks to ESPN) → `awards.ts` (pure logic) → `leaderboard.ts` (season tally; there's no storage, so each run fetches Weeks 1..N again, and a failure here sends the recap without it) → `roast.ts` (Claude writes the roast from a fixed fact sheet; the agent pipeline is described at the top of the file) → `format.ts` / `emailer.ts` (Resend).
 - `config.ts`: joins the committed `leagues.json` (non-secret) with the `LEAGUE_SECRETS_JSON` env var (ESPN cookies, keyed by league `id`).
 - `week.ts`: the week number comes from each league's `seasonWeek1Tuesday`; sends are limited to Weeks 1–14.
 - `guard.ts`: dedupe logic for the fallback schedule (see below).
@@ -20,6 +20,7 @@ Personal project. Every Tuesday it emails a recap of the past NFL week for each 
 - **Secrets live in two places that don't sync.** Local `.env` is for dev only. CI uses GitHub repo secrets, which can't be read back; update them with `gh secret set`. If local works but CI fails (or the reverse), suspect secret drift or expired ESPN cookies (`espn_s2`/`SWID`) first.
 - **`LEAGUE_SECRETS_JSON` keys must match each league's `id` in `leagues.json`**, not its `displayName`. The cookies belong to an ESPN account, not a league, so leagues I'm in share the same cookies. A friend's league uses their cookies.
 - **Every league can have a different lineup** (kicker or not, number of FLEX slots, and so on). Lineup slots come from each league's ESPN settings at runtime (`lineupSlotsFromCounts` in `espn.ts`). ESPN labels FLEX as `RB/WR/TE`. Never hardcode a lineup shape or assume one league's format. Test lineup-sensitive awards (Sleepwalker, Bonehead) against several shapes.
+- **`ROAST_PIPELINE` (off | shadow | on) is a repo *variable*, not a secret**, so `gh variable set ROAST_PIPELINE --body on` flips it with no deploy. Unset means `shadow`: the single-call roast is sent and the pipeline's roast and trace only go to the Actions log. `off` is the instant rollback.
 - `keepalive.yml` pushes a monthly commit so GitHub doesn't disable the scheduled workflow. Those `chore: keepalive` commits are expected.
 
 ## Working rules

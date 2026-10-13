@@ -1,0 +1,41 @@
+/**
+ * Deterministic checks on a roast draft, run before the Claude checker. It's free, and it can't be
+ * talked out of a wrong number.
+ */
+import { SEASON_AWARD_NAMES } from './leaderboard.js';
+
+const AWARD_NAMES = [...Object.values(SEASON_AWARD_NAMES), 'Baller of the Week'];
+const NUMBER = /\d+(?:\.\d+)?/g;
+// Small counts ("2 teams", "Week 5", "3rd") read naturally and can't hide a wrong score.
+const MAX_FREE_NUMBER = 10;
+
+/** Whether a draft number matches a sheet number. A whole number may round or drop the decimal ("88" or "87" for 87.6). */
+function matches(raw: string, sheetValue: number): boolean {
+  const value = Number(raw);
+  if (raw.includes('.')) return Math.abs(sheetValue - value) < 0.05;
+  return Math.round(sheetValue) === value || Math.trunc(sheetValue) === value;
+}
+
+function numbersIn(text: string): number[] {
+  return (text.match(NUMBER) ?? []).map(Number);
+}
+
+/** Problems with the draft, one short sentence each. Empty means it passed. */
+export function verifyDraft(draft: string, sheet: string): string[] {
+  const issues: string[] = [];
+
+  const allowed = numbersIn(sheet);
+  const unknown = new Set<string>();
+  for (const raw of draft.match(NUMBER) ?? []) {
+    if (Number(raw) <= MAX_FREE_NUMBER) continue;
+    if (!allowed.some((a) => matches(raw, a))) unknown.add(raw);
+  }
+  for (const raw of unknown) issues.push(`The number ${raw} isn't in the fact sheet.`);
+
+  const lower = draft.toLowerCase();
+  for (const name of AWARD_NAMES) {
+    if (!lower.includes(name.toLowerCase())) issues.push(`The award "${name}" is missing.`);
+  }
+
+  return issues;
+}
