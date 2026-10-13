@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, type Mocked } from 'vitest';
-import { factSheet, generateRoast, MAX_ATTEMPTS, parsePipelineMode, runPipeline, type RoastDeps } from '../src/roast.js';
+import { factSheet, generateRoast, MAX_ATTEMPTS, parsePipelineMode, runPipeline, type RoastDependencies } from '../src/roast.js';
 import type { Agents, Verdict } from '../src/agents.js';
 import type { WeekAwards } from '../src/awards.js';
 import type { SeasonLeaderboard } from '../src/leaderboard.js';
@@ -14,7 +14,10 @@ const awards: WeekAwards = {
   juggernaut: { team: 'Bravo', teamId: 2, score: 120 },
   corpse: { team: 'Jurong FC', teamId: 4, score: 60 },
   ballerOfTheWeek: { team: 'Alpha', player: 'Puka Nacua', points: 31 },
-  sleepwalker: { team: 'Delta', teamId: 3, pointsLeft: 40, actual: 80, optimal: 120 },
+  sleepwalker: {
+    team: 'Delta', teamId: 3, pointsLeft: 40, actual: 80, optimal: 120,
+    matchup: { result: 'tied', score: 80, opponent: 'Echo', opponentScore: 80, flipped: true },
+  },
   bonehead: { team: '', benched: '', benchedPoints: 0, started: '', startedPoints: 0, slot: '', regret: 0 },
   backedIntoIt: { team: 'Charlie', teamId: 5, score: 70, allPlayWinPct: 0.2, allPlay: { beaten: 2, tied: 0, opponents: 9 } },
   robbed: { team: 'Alpha', teamId: 1, score: 110, allPlayWinPct: 0.75, allPlay: { beaten: 6, tied: 1, opponents: 9 } },
@@ -128,8 +131,8 @@ function fakeAgents(drafts: string[], verdicts: Verdict[] = [APPROVED]): Mocked<
   };
 }
 
-function fakeDeps(agents: Agents): Mocked<RoastDeps> {
-  return { agents, legacy: vi.fn<RoastDeps['legacy']>(async () => 'legacy roast'), log: vi.fn<RoastDeps['log']>() } as Mocked<RoastDeps>;
+function fakeDeps(agents: Agents): Mocked<RoastDependencies> {
+  return { agents, legacy: vi.fn<RoastDependencies['legacy']>(async () => 'legacy roast'), log: vi.fn<RoastDependencies['log']>() } as Mocked<RoastDependencies>;
 }
 
 const opts = (pipeline?: 'off' | 'shadow' | 'on') => ({ apiKey: 'k', model: 'm', pipeline });

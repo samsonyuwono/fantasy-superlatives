@@ -67,7 +67,7 @@ export interface WeekAwards {
   juggernaut: { team: string; teamId: number; score: number };
   corpse: { team: string; teamId: number; score: number };
   ballerOfTheWeek: { team: string; player: string; points: number };
-  sleepwalker: { team: string; teamId: number; pointsLeft: number; actual: number; optimal: number; matchup?: MatchupOutcome };
+  sleepwalker: { team: string; teamId: number; pointsLeft: number; actual: number; optimal: number; matchup: MatchupOutcome };
   bonehead: {
     team: string;
     teamId?: number;
@@ -152,8 +152,10 @@ function computeBaller(teams: NormalizedTeam[]): WeekAwards['ballerOfTheWeek'] {
   return topStarter!;
 }
 
-function computeSleepwalker(teams: NormalizedTeam[]): WeekAwards['sleepwalker'] {
-  let mostPointsLeft: WeekAwards['sleepwalker'] | null = null;
+type Sleepwalker = Omit<WeekAwards['sleepwalker'], 'matchup'>;
+
+function computeSleepwalker(teams: NormalizedTeam[]): Sleepwalker {
+  let mostPointsLeft: Sleepwalker | null = null;
   for (const team of teams) {
     const actual = startersOf(team).reduce((sum, pl) => sum + pl.points, 0);
     const optimal = optimalLineupPoints(team);
@@ -258,22 +260,23 @@ function computeLuck(
 /** How `teamId`'s matchup went, and whether `fixedScore` (their score without the mistake) would have won it. */
 export function matchupOutcome(
   matchups: NormalizedMatchup[],
-  teamId: number | undefined,
+  teamId: number,
   fixedScore: (score: number) => number,
-): MatchupOutcome | undefined {
-  for (const m of matchups) {
-    const [team, opp] = m.home.teamId === teamId ? [m.home, m.away] : m.away.teamId === teamId ? [m.away, m.home] : [];
-    if (!team || !opp) continue;
-    const result = team.score > opp.score ? 'won' : team.score < opp.score ? 'lost' : 'tied';
+): MatchupOutcome {
+  for (const matchup of matchups) {
+    const isHome = matchup.home.teamId === teamId;
+    if (!isHome && matchup.away.teamId !== teamId) continue;
+    const [team, opponent] = isHome ? [matchup.home, matchup.away] : [matchup.away, matchup.home];
+    const result = team.score > opponent.score ? 'won' : team.score < opponent.score ? 'lost' : 'tied';
     return {
       result,
       score: team.score,
-      opponent: opp.name,
-      opponentScore: opp.score,
-      flipped: result !== 'won' && fixedScore(team.score) > opp.score,
+      opponent: opponent.name,
+      opponentScore: opponent.score,
+      flipped: result !== 'won' && fixedScore(team.score) > opponent.score,
     };
   }
-  return undefined;
+  throw new Error(`Team ${teamId} isn't in any matchup this week.`);
 }
 
 /** Compute all seven awards for one week from its normalized matchups. */
@@ -284,13 +287,21 @@ export function computeAwards(matchups: NormalizedMatchup[], week: number): Week
   const bonehead = computeBonehead(teams);
   return {
     week,
-    results: matchups.map((m) => ({ home: m.home.name, homeScore: m.home.score, away: m.away.name, awayScore: m.away.score })),
+    results: matchups.map((matchup) => ({
+      home: matchup.home.name,
+      homeScore: matchup.home.score,
+      away: matchup.away.name,
+      awayScore: matchup.away.score,
+    })),
     juggernaut: computeJuggernaut(teams),
     corpse: computeCorpse(teams),
     ballerOfTheWeek: computeBaller(teams),
     // Uses `optimal`, the number the fact sheet shows, even if ESPN's team score differs from the starters' sum.
     sleepwalker: { ...sleepwalker, matchup: matchupOutcome(matchups, sleepwalker.teamId, () => sleepwalker.optimal) },
-    bonehead: { ...bonehead, matchup: matchupOutcome(matchups, bonehead.teamId, (score) => score + bonehead.regret) },
+    bonehead:
+      bonehead.teamId === undefined
+        ? bonehead
+        : { ...bonehead, matchup: matchupOutcome(matchups, bonehead.teamId, (score) => score + bonehead.regret) },
     backedIntoIt,
     robbed,
   };

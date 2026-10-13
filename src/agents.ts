@@ -109,14 +109,14 @@ export async function callClaude(client: Anthropic, model: string, { system, use
 function writerPrompt(sheet: string, storylines: string[], revision?: Revision): string {
   const parts = [sheet];
   if (storylines.length > 0) {
-    parts.push('', 'Storylines to build the roast around:', ...storylines.map((s) => `- ${s}`));
+    parts.push('', 'Storylines to build the roast around:', ...storylines.map((storyline) => `- ${storyline}`));
   }
   if (revision) {
     parts.push(
       '',
       'Your previous draft was rejected. Rewrite it and fix every issue below.',
       'Issues:',
-      ...revision.issues.map((i) => `- ${i}`),
+      ...revision.issues.map((issue) => `- ${issue}`),
       '',
       'Previous draft:',
       revision.draft,

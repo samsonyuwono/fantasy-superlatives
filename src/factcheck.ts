@@ -31,7 +31,7 @@ export function verifyDraft(draft: string, sheet: string): string[] {
   const unknown = new Set<string>();
   for (const raw of draft.match(NUMBER) ?? []) {
     if (Number(raw) <= MAX_FREE_NUMBER) continue;
-    if (!allowed.some((a) => matches(raw, a))) unknown.add(raw);
+    if (!allowed.some((sheetValue) => matches(raw, sheetValue))) unknown.add(raw);
   }
   for (const raw of unknown) issues.push(`The number ${raw} isn't in the fact sheet. Use a number from the sheet or cut it.`);
 

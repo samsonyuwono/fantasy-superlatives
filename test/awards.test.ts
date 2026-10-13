@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeAwards, optimalLineupPoints } from '../src/awards.js';
+import { computeAwards, matchupOutcome, optimalLineupPoints } from '../src/awards.js';
 import type { NormalizedMatchup, NormalizedPlayer, NormalizedTeam } from '../src/awards.js';
 
 /**
@@ -187,6 +187,20 @@ describe('matchup results and outcomes', () => {
     const tiedBravo = { ...bravo, score: 50 };
     const tied = computeAwards([{ home: alpha, away: tiedBravo }, { home: charlie, away: delta }], 3);
     expect(tied.sleepwalker.matchup).toMatchObject({ result: 'tied', flipped: true });
+  });
+});
+
+describe('matchupOutcome', () => {
+  it('throws for a team that is not in any matchup, since that would be a bug', () => {
+    expect(() => matchupOutcome(matchups, 99, (score) => score)).toThrow("Team 99 isn't in any matchup this week.");
+  });
+
+  it('leaves the Bonehead without a matchup when nobody blundered', () => {
+    const noBench = (t: NormalizedTeam): NormalizedTeam => ({ ...t, players: t.players.filter((pl) => pl.slot !== 'Bench') });
+    const awards = computeAwards([{ home: noBench(alpha), away: noBench(bravo) }], 3);
+    expect(awards.bonehead.teamId).toBeUndefined();
+    expect(awards.bonehead.matchup).toBeUndefined();
+    expect(awards.sleepwalker.matchup).toBeDefined();
   });
 });
 

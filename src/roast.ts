@@ -23,17 +23,16 @@ export interface RoastOptions {
   apiKey: string;
   model: string;
   pipeline?: PipelineMode;
-  /** The league's display name, to tell leagues apart in the logs since they run at the same time. */
   league?: string;
 }
 
 /** e.g. "2 of the other 9 teams", or "2 of the other 9 teams and tied 1". */
-function allPlayText(r: AllPlayRecord): string {
-  const base = `${r.beaten} of the other ${r.opponents} teams`;
-  return r.tied > 0 ? `${base} and tied ${r.tied}` : base;
+function allPlayText(record: AllPlayRecord): string {
+  const base = `${record.beaten} of the other ${record.opponents} teams`;
+  return record.tied > 0 ? `${base} and tied ${record.tied}` : base;
 }
 
-const n = (x: number) => x.toFixed(1);
+const formatPoints = (points: number) => points.toFixed(1);
 
 /** The two ways an award's mistake is described, e.g. for the Sleepwalker. */
 interface Mistake {
@@ -47,60 +46,60 @@ const SLEEPWALKER_MISTAKE: Mistake = { what: 'the points left on the bench', fix
 const BONEHEAD_MISTAKE: Mistake = { what: 'that start/sit', fix: 'the right start/sit' };
 
 /** e.g. "Delta still won 80.0–75.0 over Echo, so the points left on the bench didn't cost them the game." */
-function outcomeText(team: string, m: MatchupOutcome | undefined, { what, fix }: Mistake): string {
-  if (!m) return '';
-  const vs = `${n(m.score)}–${n(m.opponentScore)}`;
-  if (m.result === 'won') return ` ${team} still won ${vs} over ${m.opponent}, so ${what} didn't cost them the game.`;
-  if (m.result === 'tied') {
-    return m.flipped
-      ? ` ${team} tied ${m.opponent} at ${n(m.score)}, and with ${fix} they would have won.`
-      : ` ${team} tied ${m.opponent} at ${n(m.score)}, so ${what} didn't cost them the win.`;
+function outcomeText(team: string, outcome: MatchupOutcome | undefined, { what, fix }: Mistake): string {
+  if (!outcome) return '';
+  const finalScore = `${formatPoints(outcome.score)}–${formatPoints(outcome.opponentScore)}`;
+  if (outcome.result === 'won') return ` ${team} still won ${finalScore} over ${outcome.opponent}, so ${what} didn't cost them the game.`;
+  if (outcome.result === 'tied') {
+    return outcome.flipped
+      ? ` ${team} tied ${outcome.opponent} at ${formatPoints(outcome.score)}, and with ${fix} they would have won.`
+      : ` ${team} tied ${outcome.opponent} at ${formatPoints(outcome.score)}, so ${what} didn't cost them the win.`;
   }
-  return m.flipped
-    ? ` ${team} lost ${vs} to ${m.opponent}, and with ${fix} they would have won.`
-    : ` ${team} lost ${vs} to ${m.opponent}, and would have lost even with ${fix}.`;
+  return outcome.flipped
+    ? ` ${team} lost ${finalScore} to ${outcome.opponent}, and with ${fix} they would have won.`
+    : ` ${team} lost ${finalScore} to ${outcome.opponent}, and would have lost even with ${fix}.`;
 }
 
-function resultLine(r: MatchupResult): string {
-  if (r.homeScore === r.awayScore) return `- ${r.home} and ${r.away} tied at ${n(r.homeScore)}`;
-  const [w, ws, l, ls] = r.homeScore > r.awayScore ? [r.home, r.homeScore, r.away, r.awayScore] : [r.away, r.awayScore, r.home, r.homeScore];
-  return `- ${w} beat ${l}, ${n(ws)}–${n(ls)} (by ${n(ws - ls)})`;
+function resultLine(result: MatchupResult): string {
+  if (result.homeScore === result.awayScore) return `- ${result.home} and ${result.away} tied at ${formatPoints(result.homeScore)}`;
+  const [winner, winnerScore, loser, loserScore] = result.homeScore > result.awayScore ? [result.home, result.homeScore, result.away, result.awayScore] : [result.away, result.awayScore, result.home, result.homeScore];
+  return `- ${winner} beat ${loser}, ${formatPoints(winnerScore)}–${formatPoints(loserScore)} (by ${formatPoints(winnerScore - loserScore)})`;
 }
 
 /** A compact, unambiguous fact sheet for the model — no room to hallucinate the numbers. */
-export function factSheet(a: WeekAwards, leaderboard?: SeasonLeaderboard): string {
+export function factSheet(awards: WeekAwards, leaderboard?: SeasonLeaderboard): string {
   const lines = [
-    `Week ${a.week} fantasy football results. The award names are fixed — use them verbatim.`,
+    `Week ${awards.week} fantasy football results. The award names are fixed — use them verbatim.`,
     '',
-    `- The Juggernaut (highest team score): ${a.juggernaut.team} — ${n(a.juggernaut.score)} pts`,
-    `- The Corpse (lowest team score): ${a.corpse.team} — ${n(a.corpse.score)} pts`,
-    `- Baller of the Week (top individual starter): ${a.ballerOfTheWeek.player} on ${a.ballerOfTheWeek.team} — ${n(a.ballerOfTheWeek.points)} pts`,
-    `- The Sleepwalker (most points left on the bench): ${a.sleepwalker.team} — left ${n(a.sleepwalker.pointsLeft)} pts on the bench (started ${n(a.sleepwalker.actual)}, optimal was ${n(a.sleepwalker.optimal)}).${outcomeText(a.sleepwalker.team, a.sleepwalker.matchup, SLEEPWALKER_MISTAKE)}`,
-    `- The Bonehead (worst start/sit): ${a.bonehead.team} benched ${a.bonehead.benched} (${n(a.bonehead.benchedPoints)}) and started ${a.bonehead.started} (${n(a.bonehead.startedPoints)}) at ${a.bonehead.slot} — a ${n(a.bonehead.regret)}-pt blunder.${outcomeText(a.bonehead.team, a.bonehead.matchup, BONEHEAD_MISTAKE)}`,
-    a.backedIntoIt.teamId === undefined
+    `- The Juggernaut (highest team score): ${awards.juggernaut.team} — ${formatPoints(awards.juggernaut.score)} pts`,
+    `- The Corpse (lowest team score): ${awards.corpse.team} — ${formatPoints(awards.corpse.score)} pts`,
+    `- Baller of the Week (top individual starter): ${awards.ballerOfTheWeek.player} on ${awards.ballerOfTheWeek.team} — ${formatPoints(awards.ballerOfTheWeek.points)} pts`,
+    `- The Sleepwalker (most points left on the bench): ${awards.sleepwalker.team} — left ${formatPoints(awards.sleepwalker.pointsLeft)} pts on the bench (started ${formatPoints(awards.sleepwalker.actual)}, optimal was ${formatPoints(awards.sleepwalker.optimal)}).${outcomeText(awards.sleepwalker.team, awards.sleepwalker.matchup, SLEEPWALKER_MISTAKE)}`,
+    `- The Bonehead (worst start/sit): ${awards.bonehead.team} benched ${awards.bonehead.benched} (${formatPoints(awards.bonehead.benchedPoints)}) and started ${awards.bonehead.started} (${formatPoints(awards.bonehead.startedPoints)}) at ${awards.bonehead.slot} — a ${formatPoints(awards.bonehead.regret)}-pt blunder.${outcomeText(awards.bonehead.team, awards.bonehead.matchup, BONEHEAD_MISTAKE)}`,
+    awards.backedIntoIt.teamId === undefined
       ? '- Backed Into It (luckiest win): nobody, since every matchup this week was a tie'
-      : `- Backed Into It (luckiest win): ${a.backedIntoIt.team} won with ${n(a.backedIntoIt.score)} pts (would have beaten ${allPlayText(a.backedIntoIt.allPlay)})`,
-    a.robbed.teamId === undefined
+      : `- Backed Into It (luckiest win): ${awards.backedIntoIt.team} won with ${formatPoints(awards.backedIntoIt.score)} pts (would have beaten ${allPlayText(awards.backedIntoIt.allPlay)})`,
+    awards.robbed.teamId === undefined
       ? '- Robbed (unluckiest loss): nobody, since every matchup this week was a tie'
-      : `- Robbed (unluckiest loss): ${a.robbed.team} lost with ${n(a.robbed.score)} pts (would have beaten ${allPlayText(a.robbed.allPlay)})`,
+      : `- Robbed (unluckiest loss): ${awards.robbed.team} lost with ${formatPoints(awards.robbed.score)} pts (would have beaten ${allPlayText(awards.robbed.allPlay)})`,
   ];
-  if (a.results.length > 0) lines.push('', 'Matchup results:', ...a.results.map(resultLine));
-  if (leaderboard) lines.push('', ...seasonFacts(a, leaderboard));
+  if (awards.results.length > 0) lines.push('', 'Matchup results:', ...awards.results.map(resultLine));
+  if (leaderboard) lines.push('', ...seasonFacts(awards, leaderboard));
   return lines.join('\n');
 }
 
 /** Season-to-date facts: repeat winners from this week, then each award's season leader. */
-function seasonFacts(a: WeekAwards, lb: SeasonLeaderboard): string[] {
-  const lines = [`Season so far (${describeWeeks(lb.weeks)}):`];
+function seasonFacts(awards: WeekAwards, leaderboard: SeasonLeaderboard): string[] {
+  const lines = [`Season so far (${describeWeeks(leaderboard.weeks)}):`];
   for (const key of SEASON_AWARD_KEYS) {
-    const teamId = a[key].teamId;
+    const teamId = awards[key].teamId;
     if (teamId === undefined) continue;
-    const wins = lb.counts[key].get(teamId) ?? 0;
+    const wins = leaderboard.counts[key].get(teamId) ?? 0;
     // Only repeat winners, and only once the award would show on the leaderboard.
-    if (wins >= Math.max(2, MIN_WINS_TO_LEAD[key])) lines.push(`- ${a[key].team} has now won ${SEASON_AWARD_NAMES[key]} ${wins} times this season (including this week).`);
+    if (wins >= Math.max(2, MIN_WINS_TO_LEAD[key])) lines.push(`- ${awards[key].team} has now won ${SEASON_AWARD_NAMES[key]} ${wins} times this season (including this week).`);
   }
   for (const key of SEASON_AWARD_KEYS) {
-    const leader = lb.leaders[key];
+    const leader = leaderboard.leaders[key];
     if (leader) lines.push(`- Season leader for ${SEASON_AWARD_NAMES[key]}: ${leader.teams.join(' and ')} with ${leader.count}`);
   }
   return lines;
@@ -111,7 +110,7 @@ export type PipelineMode = 'off' | 'shadow' | 'on';
 const PIPELINE_MODES: readonly PipelineMode[] = ['off', 'shadow', 'on'];
 
 /** Reads `ROAST_PIPELINE`. Unset means shadow; an unknown value warns and falls back to shadow. */
-export function parsePipelineMode(value: string | undefined, warn: (msg: string) => void = console.warn): PipelineMode {
+export function parsePipelineMode(value: string | undefined, warn: (message: string) => void = console.warn): PipelineMode {
   if (!value) return 'shadow';
   if ((PIPELINE_MODES as readonly string[]).includes(value)) return value as PipelineMode;
   warn(`Unknown ROAST_PIPELINE "${value}", so using "shadow". Expected one of: ${PIPELINE_MODES.join(', ')}.`);
@@ -143,8 +142,8 @@ export async function runPipeline(sheet: string, agents: Agents): Promise<Pipeli
     calls++;
     storylines = await agents.analyst(sheet);
     steps.push(`analyst ok (${storylines.length} storylines)`);
-  } catch (err) {
-    steps.push(`analyst failed (${errorMessage(err)}), writing without storylines`);
+  } catch (error) {
+    steps.push(`analyst failed (${errorMessage(error)}), writing without storylines`);
   }
 
   let revision: Revision | undefined;
@@ -168,16 +167,16 @@ export async function runPipeline(sheet: string, agents: Agents): Promise<Pipeli
       }
       steps.push(`draft ${attempt} rejected (checker: ${quote(verdict.issues)})`);
       revision = { draft, issues: verdict.issues.length > 0 ? verdict.issues : ['The checker rejected the draft.'] };
-    } catch (err) {
-      steps.push(`draft ${attempt} failed (${errorMessage(err)})`);
+    } catch (error) {
+      steps.push(`draft ${attempt} failed (${errorMessage(error)})`);
     }
   }
   steps.push('gave up');
   return done(null);
 }
 
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function quote(issues: string[]): string {
@@ -185,7 +184,7 @@ function quote(issues: string[]): string {
   return rest.length > 0 ? `"${first}" +${rest.length} more` : `"${first}"`;
 }
 
-export interface RoastDeps {
+export interface RoastDependencies {
   agents: Agents;
   /** Today's single-call roast. It's the fallback, and what shadow mode sends. */
   legacy(sheet: string): Promise<string>;
@@ -196,47 +195,47 @@ export interface RoastDeps {
 // so a hung call fails fast into the next attempt or the fallback.
 const CLAUDE_TIMEOUT_MS = 90_000;
 
-function claudeDeps(opts: RoastOptions): RoastDeps {
-  const client = new Anthropic({ apiKey: opts.apiKey, timeout: CLAUDE_TIMEOUT_MS });
+function claudeDependencies(options: RoastOptions): RoastDependencies {
+  const client = new Anthropic({ apiKey: options.apiKey, timeout: CLAUDE_TIMEOUT_MS });
   return {
-    agents: claudeAgents(client, opts.model),
-    legacy: (sheet) => callClaude(client, opts.model, { system: ROAST_PROMPT, user: sheet }),
+    agents: claudeAgents(client, options.model),
+    legacy: (sheet) => callClaude(client, options.model, { system: ROAST_PROMPT, user: sheet }),
     log: (message) => console.info(message),
   };
 }
 
 /**
- * Generate the roast text, according to `opts.pipeline`. Throws only if the roast that would be
+ * Generate the roast text, according to `options.pipeline`. Throws only if the roast that would be
  * sent fails (the caller decides how to handle it); a failing pipeline never blocks the send.
  */
 export async function generateRoast(
   awards: WeekAwards,
-  opts: RoastOptions,
+  options: RoastOptions,
   leaderboard?: SeasonLeaderboard,
-  deps: RoastDeps = claudeDeps(opts),
+  dependencies: RoastDependencies = claudeDependencies(options),
 ): Promise<string> {
   const sheet = factSheet(awards, leaderboard);
-  const mode = opts.pipeline ?? 'shadow';
-  const log = (message: string) => deps.log(opts.league ? `[${opts.league}] ${message}` : message);
+  const mode = options.pipeline ?? 'shadow';
+  const log = (message: string) => dependencies.log(options.league ? `[${options.league}] ${message}` : message);
 
-  if (mode === 'off') return deps.legacy(sheet);
+  if (mode === 'off') return dependencies.legacy(sheet);
 
   if (mode === 'shadow') {
     // Not awaited, so a slow pipeline never delays the send. It logs whenever it finishes, and the
     // process stays alive until then.
-    void runPipeline(sheet, deps.agents).then(
+    void runPipeline(sheet, dependencies.agents).then(
       ({ roast, trace }) => {
         log(`[shadow] ${trace}`);
         if (roast) log(`[shadow] Pipeline roast (not sent):\n${roast}`);
       },
-      (err: unknown) => log(`[shadow] pipeline crashed: ${errorMessage(err)}`),
+      (error: unknown) => log(`[shadow] pipeline crashed: ${errorMessage(error)}`),
     );
-    return deps.legacy(sheet);
+    return dependencies.legacy(sheet);
   }
 
-  const { roast, trace } = await runPipeline(sheet, deps.agents);
+  const { roast, trace } = await runPipeline(sheet, dependencies.agents);
   log(trace);
   if (roast) return roast;
   log('roast: falling back to the single-call roast');
-  return deps.legacy(sheet);
+  return dependencies.legacy(sheet);
 }
