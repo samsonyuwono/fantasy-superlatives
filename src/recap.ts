@@ -128,7 +128,12 @@ async function runLeagueRecap(
 
     const roast = await generateRoast(
       awards,
-      { apiKey: shared.anthropicApiKey, model: shared.anthropicModel, pipeline: shared.roastPipeline },
+      {
+        apiKey: shared.anthropicApiKey,
+        model: shared.anthropicModel,
+        pipeline: shared.roastPipeline,
+        league: league.displayName,
+      },
       leaderboard,
     );
 

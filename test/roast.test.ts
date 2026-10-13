@@ -220,6 +220,12 @@ describe('generateRoast', () => {
     });
   });
 
+  it('labels the logs with the league', async () => {
+    const deps = fakeDeps(fakeAgents([GOOD_DRAFT]));
+    await generateRoast(awards, { ...opts('shadow'), league: 'Main League' }, undefined, deps);
+    await vi.waitFor(() => expect(deps.log).toHaveBeenCalledWith(expect.stringMatching(/^\[Main League\] \[shadow\] roast: /)));
+  });
+
   it('shadow: sends without waiting for the pipeline to finish', async () => {
     const agents = fakeAgents([GOOD_DRAFT]);
     agents.analyst.mockReturnValue(new Promise<string[]>(() => {}));

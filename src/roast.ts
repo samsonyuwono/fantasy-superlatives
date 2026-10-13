@@ -23,6 +23,8 @@ export interface RoastOptions {
   apiKey: string;
   model: string;
   pipeline?: PipelineMode;
+  /** The league's display name, to tell leagues apart in the logs since they run at the same time. */
+  league?: string;
 }
 
 /** e.g. "2 of the other 9 teams", or "2 of the other 9 teams and tied 1". */
@@ -190,8 +192,12 @@ export interface RoastDeps {
   log(message: string): void;
 }
 
+// Per request, before the SDK's retries. The SDK default is 10 minutes, and a roast call takes seconds,
+// so a hung call fails fast into the next attempt or the fallback.
+const CLAUDE_TIMEOUT_MS = 90_000;
+
 function claudeDeps(opts: RoastOptions): RoastDeps {
-  const client = new Anthropic({ apiKey: opts.apiKey });
+  const client = new Anthropic({ apiKey: opts.apiKey, timeout: CLAUDE_TIMEOUT_MS });
   return {
     agents: claudeAgents(client, opts.model),
     legacy: (sheet) => callClaude(client, opts.model, { system: ROAST_PROMPT, user: sheet }),
@@ -211,6 +217,7 @@ export async function generateRoast(
 ): Promise<string> {
   const sheet = factSheet(awards, leaderboard);
   const mode = opts.pipeline ?? 'shadow';
+  const log = (message: string) => deps.log(opts.league ? `[${opts.league}] ${message}` : message);
 
   if (mode === 'off') return deps.legacy(sheet);
 
@@ -219,17 +226,17 @@ export async function generateRoast(
     // process stays alive until then.
     void runPipeline(sheet, deps.agents).then(
       ({ roast, trace }) => {
-        deps.log(`[shadow] ${trace}`);
-        if (roast) deps.log(`[shadow] Pipeline roast (not sent):\n${roast}`);
+        log(`[shadow] ${trace}`);
+        if (roast) log(`[shadow] Pipeline roast (not sent):\n${roast}`);
       },
-      (err: unknown) => deps.log(`[shadow] pipeline crashed: ${errorMessage(err)}`),
+      (err: unknown) => log(`[shadow] pipeline crashed: ${errorMessage(err)}`),
     );
     return deps.legacy(sheet);
   }
 
   const { roast, trace } = await runPipeline(sheet, deps.agents);
-  deps.log(trace);
+  log(trace);
   if (roast) return roast;
-  deps.log('roast: falling back to the single-call roast');
+  log('roast: falling back to the single-call roast');
   return deps.legacy(sheet);
 }
