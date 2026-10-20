@@ -84,4 +84,11 @@ describe('formatEmailBody', () => {
   it('leaves the leaderboard out when there is none', () => {
     expect(formatEmailBody(awards, 'roast')).not.toContain('SEASON LEADERBOARD');
   });
+
+  it("calls ESPN's RB/WR/TE slot Flex", () => {
+    const flexAwards = { ...awards, bonehead: { ...awards.bonehead, slot: 'RB/WR/TE' } };
+    const body = formatEmailBody(flexAwards, 'roast');
+    expect(body).toContain('over A (20.0) at Flex');
+    expect(body).not.toContain('RB/WR/TE');
+  });
 });

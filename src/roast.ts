@@ -8,7 +8,7 @@
  * `shadow` (the default) sends the single-call roast and only logs what the pipeline would have sent.
  */
 import Anthropic from '@anthropic-ai/sdk';
-import type { AllPlayRecord, MatchupOutcome, MatchupResult, WeekAwards } from './awards.js';
+import { slotLabel, type AllPlayRecord, type MatchupOutcome, type MatchupResult, type WeekAwards } from './awards.js';
 import { callClaude, claudeAgents, ROAST_PROMPT, type Agents, type Revision } from './agents.js';
 import { verifyDraft } from './factcheck.js';
 import {
@@ -75,7 +75,7 @@ export function factSheet(awards: WeekAwards, leaderboard?: SeasonLeaderboard): 
     `- The Corpse (lowest team score): ${awards.corpse.team} — ${formatPoints(awards.corpse.score)} pts`,
     `- Baller of the Week (top individual starter): ${awards.ballerOfTheWeek.player} on ${awards.ballerOfTheWeek.team} — ${formatPoints(awards.ballerOfTheWeek.points)} pts`,
     `- The Sleepwalker (most points left on the bench): ${awards.sleepwalker.team} — left ${formatPoints(awards.sleepwalker.pointsLeft)} pts on the bench (started ${formatPoints(awards.sleepwalker.actual)}, optimal was ${formatPoints(awards.sleepwalker.optimal)}).${outcomeText(awards.sleepwalker.team, awards.sleepwalker.matchup, SLEEPWALKER_MISTAKE)}`,
-    `- The Bonehead (worst start/sit): ${awards.bonehead.team} benched ${awards.bonehead.benched} (${formatPoints(awards.bonehead.benchedPoints)}) and started ${awards.bonehead.started} (${formatPoints(awards.bonehead.startedPoints)}) at ${awards.bonehead.slot} — a ${formatPoints(awards.bonehead.regret)}-pt blunder.${outcomeText(awards.bonehead.team, awards.bonehead.matchup, BONEHEAD_MISTAKE)}`,
+    `- The Bonehead (worst start/sit): ${awards.bonehead.team} benched ${awards.bonehead.benched} (${formatPoints(awards.bonehead.benchedPoints)}) and started ${awards.bonehead.started} (${formatPoints(awards.bonehead.startedPoints)}) at ${slotLabel(awards.bonehead.slot)} — a ${formatPoints(awards.bonehead.regret)}-pt blunder.${outcomeText(awards.bonehead.team, awards.bonehead.matchup, BONEHEAD_MISTAKE)}`,
     awards.backedIntoIt.teamId === undefined
       ? '- Backed Into It (luckiest win): nobody, since every matchup this week was a tie'
       : `- Backed Into It (luckiest win): ${awards.backedIntoIt.team} won with ${formatPoints(awards.backedIntoIt.score)} pts (would have beaten ${allPlayText(awards.backedIntoIt.allPlay)})`,
