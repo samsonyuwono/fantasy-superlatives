@@ -67,6 +67,16 @@ describe('factSheet', () => {
     );
   });
 
+  it("calls ESPN's RB/WR/TE slot Flex so the roast does too", () => {
+    const bonehead = {
+      team: 'Alpha', teamId: 1, benched: 'A', benchedPoints: 20, started: 'B', startedPoints: 2, slot: 'RB/WR/TE', regret: 18,
+      matchup: { result: 'won' as const, score: 120, opponent: 'Bravo', opponentScore: 110, flipped: false },
+    };
+    const sheet = factSheet({ ...awards, bonehead });
+    expect(sheet).toContain('started B (2.0) at Flex —');
+    expect(sheet).not.toContain('RB/WR/TE');
+  });
+
   it('says when a tie would have happened anyway', () => {
     const sleepwalker = { ...awards.sleepwalker, matchup: { result: 'tied' as const, score: 80, opponent: 'Echo', opponentScore: 80, flipped: false } };
     expect(factSheet({ ...awards, sleepwalker })).toContain(

@@ -3,7 +3,7 @@
  * awards, then the season leaderboard when there is one. Plain text so it pastes straight
  * into WhatsApp.
  */
-import type { WeekAwards } from './awards.js';
+import { slotLabel, type WeekAwards } from './awards.js';
 import { describeWeeks, SEASON_AWARD_KEYS, SEASON_AWARD_NAMES, type SeasonAwardKey, type SeasonLeaderboard } from './leaderboard.js';
 
 const n = (x: number) => x.toFixed(1);
@@ -50,7 +50,7 @@ export function formatEmailBody(awards: WeekAwards, roast: string, leaderboard?:
   lines.push(`⭐ Baller of the Week — ${a.ballerOfTheWeek.player}, ${a.ballerOfTheWeek.team} (${n(a.ballerOfTheWeek.points)})`);
   lines.push(`😴 The Sleepwalker — ${a.sleepwalker.team} left ${n(a.sleepwalker.pointsLeft)} on the bench`);
   lines.push(
-    `🤡 The Bonehead — ${a.bonehead.team}: started ${a.bonehead.started} (${n(a.bonehead.startedPoints)}) over ${a.bonehead.benched} (${n(a.bonehead.benchedPoints)}) at ${a.bonehead.slot}`,
+    `🤡 The Bonehead — ${a.bonehead.team}: started ${a.bonehead.started} (${n(a.bonehead.startedPoints)}) over ${a.bonehead.benched} (${n(a.bonehead.benchedPoints)}) at ${slotLabel(a.bonehead.slot)}`,
   );
   lines.push(`🍀 Backed Into It — ${a.backedIntoIt.team} won with ${n(a.backedIntoIt.score)}`);
   lines.push(`😤 Robbed — ${a.robbed.team} lost with ${n(a.robbed.score)}`);

@@ -86,6 +86,11 @@ export interface WeekAwards {
 const BENCH = 'Bench';
 const IR = 'IR';
 
+/** How a lineup slot reads in the recap. ESPN calls the FLEX slot 'RB/WR/TE'; the league calls it Flex. */
+export function slotLabel(slot: string): string {
+  return slot === 'RB/WR/TE' ? 'Flex' : slot;
+}
+
 const isStarter = (pl: NormalizedPlayer): boolean => pl.slot !== BENCH && pl.slot !== IR;
 const startersOf = (team: NormalizedTeam): NormalizedPlayer[] => team.players.filter(isStarter);
 const benchOf = (team: NormalizedTeam): NormalizedPlayer[] => team.players.filter((pl) => pl.slot === BENCH);
