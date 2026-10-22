@@ -266,3 +266,146 @@ describe('optimalLineupPoints with league lineup slots (empty starting slot)', (
     expect(optimalLineupPoints(withoutSlots)).toBeCloseTo(22, 5);
   });
 });
+
+const teamScoring = (teamId: number, score: number, starterPoints: number[] = [score]): NormalizedTeam => ({
+  teamId,
+  name: `Team ${teamId}`,
+  score,
+  players: starterPoints.map((points, index) => player(`Starter ${teamId}.${index + 1}`, points, 'RB', ['RB'])),
+});
+
+const matchupOf = (homeScore: number, awayScore: number, homeId: number, awayId: number): NormalizedMatchup => ({
+  home: teamScoring(homeId, homeScore),
+  away: teamScoring(awayId, awayScore),
+});
+
+describe('bonus awards on the 4-team week', () => {
+  const awards = computeAwards(matchups, 3);
+
+  it('gives no Heartbreaker when the closest loss is by 21', () => {
+    expect(awards.heartbreaker).toBeUndefined();
+  });
+
+  it('gives no Mercy Rule when the biggest win is by 32', () => {
+    expect(awards.mercyRule).toBeUndefined();
+  });
+
+  it("gives One-Man Army to Delta, since Dak Prescott's 11 is 42% of their 26", () => {
+    expect(awards.oneManArmy).toEqual({
+      team: 'Delta',
+      teamId: 4,
+      player: 'Dak Prescott',
+      points: 11,
+      teamScore: 26,
+      share: 11 / 26,
+    });
+  });
+});
+
+describe('Heartbreaker', () => {
+  it('goes to the loser with the smallest margin, up to 5 points', () => {
+    const awards = computeAwards([matchupOf(100, 120, 1, 2), matchupOf(97, 100, 3, 4)], 1);
+    expect(awards.heartbreaker).toEqual({
+      team: 'Team 3',
+      teamId: 3,
+      score: 97,
+      opponent: 'Team 4',
+      opponentScore: 100,
+      margin: 3,
+    });
+  });
+
+  it('counts a margin of exactly 5, even when the subtraction is a floating-point near miss', () => {
+    expect(computeAwards([matchupOf(105.3, 100.3, 1, 2)], 1).heartbreaker?.teamId).toBe(2);
+    expect(computeAwards([matchupOf(100, 105, 1, 2)], 1).heartbreaker?.margin).toBe(5);
+  });
+
+  it('skips a loss by 5.01', () => {
+    expect(computeAwards([matchupOf(100, 105.01, 1, 2)], 1).heartbreaker).toBeUndefined();
+  });
+
+  it('never goes to a tie', () => {
+    expect(computeAwards([matchupOf(100, 100, 1, 2), matchupOf(90, 120, 3, 4)], 1).heartbreaker).toBeUndefined();
+  });
+
+  it('goes to the first one found when two losses tie on margin', () => {
+    expect(computeAwards([matchupOf(98, 100, 1, 2), matchupOf(110, 108, 3, 4)], 1).heartbreaker?.teamId).toBe(1);
+  });
+});
+
+describe('Mercy Rule', () => {
+  it('goes to the winner of the biggest blowout, from 60 points', () => {
+    const awards = computeAwards([matchupOf(150, 85, 1, 2), matchupOf(60, 130, 3, 4)], 1);
+    expect(awards.mercyRule).toEqual({
+      team: 'Team 4',
+      teamId: 4,
+      score: 130,
+      opponent: 'Team 3',
+      opponentScore: 60,
+      margin: 70,
+    });
+  });
+
+  it('counts a margin of exactly 60, and skips 59.99', () => {
+    expect(computeAwards([matchupOf(160.3, 100.3, 1, 2)], 1).mercyRule?.margin).toBe(60);
+    expect(computeAwards([matchupOf(159.99, 100, 1, 2)], 1).mercyRule).toBeUndefined();
+  });
+
+  it('goes to the first one found when two blowouts tie on margin', () => {
+    expect(computeAwards([matchupOf(70, 140, 1, 2), matchupOf(150, 80, 3, 4)], 1).mercyRule?.teamId).toBe(2);
+  });
+});
+
+describe('One-Man Army', () => {
+  const week = (home: NormalizedTeam, away: NormalizedTeam) => computeAwards([{ home, away }], 1).oneManArmy;
+
+  it('counts a share of exactly 35%, and skips 34.9%', () => {
+    expect(week(teamScoring(1, 100, [35, 33, 32]), teamScoring(2, 100, [34, 33, 33]))?.teamId).toBe(1);
+    expect(week(teamScoring(1, 100, [34.9, 33, 32.1]), teamScoring(2, 100, [34, 33, 33]))).toBeUndefined();
+  });
+
+  it('skips a team that scored 0 or less', () => {
+    expect(week(teamScoring(1, 0, [0, 0]), teamScoring(2, -2, [3, -5]))).toBeUndefined();
+  });
+
+  it('ignores benched players', () => {
+    const benchHero: NormalizedTeam = {
+      ...teamScoring(1, 100, [34, 33, 33]),
+      players: [...teamScoring(1, 100, [34, 33, 33]).players, player('Bench Hero', 60, 'Bench', ['RB'])],
+    };
+    expect(week(benchHero, teamScoring(2, 100, [34, 33, 33]))).toBeUndefined();
+  });
+
+  it('goes to the first one found when two teams tie on share', () => {
+    expect(week(teamScoring(1, 100, [50, 50]), teamScoring(2, 80, [40, 40]))?.teamId).toBe(1);
+  });
+
+  it('works the same for a 2-FLEX no-kicker lineup and a kicker 1-FLEX lineup', () => {
+    const twoFlexNoKicker: NormalizedTeam = {
+      teamId: 1,
+      name: 'Two Flex',
+      score: 100,
+      lineupSlots: ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'RB/WR/TE', 'RB/WR/TE', 'D/ST'],
+      players: [
+        player('Big Flex', 40, 'RB/WR/TE', ['RB', 'RB/WR/TE']),
+        player('Other Flex', 10, 'RB/WR/TE', ['WR', 'RB/WR/TE']),
+        player('Quarterback', 20, 'QB', ['QB']),
+        player('Rest', 30, 'RB', ['RB', 'RB/WR/TE']),
+      ],
+    };
+    const kickerOneFlex: NormalizedTeam = {
+      teamId: 2,
+      name: 'Kicker',
+      score: 100,
+      lineupSlots: ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'RB/WR/TE', 'D/ST', 'K'],
+      players: [
+        player('Big Kicker', 40, 'K', ['K']),
+        player('Flex', 10, 'RB/WR/TE', ['WR', 'RB/WR/TE']),
+        player('Quarterback', 20, 'QB', ['QB']),
+        player('Rest', 30, 'RB', ['RB', 'RB/WR/TE']),
+      ],
+    };
+    expect(week(twoFlexNoKicker, teamScoring(3, 100, [30, 35, 35]))).toMatchObject({ player: 'Big Flex', share: 0.4 });
+    expect(week(teamScoring(3, 100, [30, 35, 35]), kickerOneFlex)).toMatchObject({ player: 'Big Kicker', share: 0.4 });
+  });
+});

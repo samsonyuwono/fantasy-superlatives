@@ -23,6 +23,20 @@ export function formatLeaderboard(leaderboard: SeasonLeaderboard): string[] {
   return lines;
 }
 
+const wholePercent = (share: number) => `${Math.round(share * 100)}%`;
+
+function bonusAwardLines({ heartbreaker, mercyRule, oneManArmy }: WeekAwards): string[] {
+  const lines: string[] = [];
+  if (heartbreaker) lines.push(awardLine('heartbreaker', `${heartbreaker.team} lost to ${heartbreaker.opponent} by ${oneDecimal(heartbreaker.margin)}`));
+  if (mercyRule) lines.push(awardLine('mercyRule', `${mercyRule.team} beat ${mercyRule.opponent} by ${oneDecimal(mercyRule.margin)}`));
+  if (oneManArmy) {
+    lines.push(
+      awardLine('oneManArmy', `${oneManArmy.player} scored ${oneDecimal(oneManArmy.points)} of ${oneManArmy.team}'s ${oneDecimal(oneManArmy.teamScore)} (${wholePercent(oneManArmy.share)})`),
+    );
+  }
+  return lines;
+}
+
 /**
  * The full email: the roast, this week's awards, then the season leaderboard when there is one.
  * Plain text so it pastes straight into WhatsApp.
@@ -47,6 +61,7 @@ export function formatEmailBody(awards: WeekAwards, roast: string, leaderboard?:
   );
   lines.push(awardLine('backedIntoIt', `${awards.backedIntoIt.team} won with ${oneDecimal(awards.backedIntoIt.score)}`));
   lines.push(awardLine('robbed', `${awards.robbed.team} lost with ${oneDecimal(awards.robbed.score)}`));
+  lines.push(...bonusAwardLines(awards));
 
   if (leaderboard) {
     lines.push('');

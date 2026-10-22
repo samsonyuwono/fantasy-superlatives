@@ -79,20 +79,39 @@ export function factSheet(awards: WeekAwards, leaderboard?: SeasonLeaderboard): 
         : `${awards.robbed.team} lost with ${formatPoints(awards.robbed.score)} pts (would have beaten ${allPlayText(awards.robbed.allPlay)})`,
     ),
   ];
+  const bonusFacts = bonusAwardFacts(awards);
+  if (bonusFacts.length > 0) lines.push('', 'Bonus awards this week (optional to mention):', ...bonusFacts);
   if (awards.results.length > 0) lines.push('', 'Matchup results:', ...awards.results.map(resultLine));
   if (leaderboard) lines.push('', ...seasonFacts(awards, leaderboard));
   return lines.join('\n');
 }
 
+const wholePercent = (share: number) => `${Math.round(share * 100)}%`;
+
+function bonusAwardFacts({ heartbreaker, mercyRule, oneManArmy }: WeekAwards): string[] {
+  const facts: string[] = [];
+  if (heartbreaker) {
+    facts.push(awardFact('heartbreaker', `${heartbreaker.team} lost ${formatPoints(heartbreaker.score)}–${formatPoints(heartbreaker.opponentScore)} to ${heartbreaker.opponent}, by ${formatPoints(heartbreaker.margin)}`));
+  }
+  if (mercyRule) {
+    facts.push(awardFact('mercyRule', `${mercyRule.team} beat ${mercyRule.opponent} ${formatPoints(mercyRule.score)}–${formatPoints(mercyRule.opponentScore)}, by ${formatPoints(mercyRule.margin)}`));
+  }
+  if (oneManArmy) {
+    facts.push(awardFact('oneManArmy', `${oneManArmy.player} scored ${formatPoints(oneManArmy.points)} of ${oneManArmy.team}'s ${formatPoints(oneManArmy.teamScore)} pts (${wholePercent(oneManArmy.share)})`));
+  }
+  return facts;
+}
+
 function seasonFacts(awards: WeekAwards, leaderboard: SeasonLeaderboard): string[] {
   const lines = [`Season so far (${describeWeeks(leaderboard.weeks)}):`];
   for (const key of SEASON_AWARD_KEYS) {
-    const teamId = awards[key].teamId;
-    if (teamId === undefined) continue;
+    const award = awards[key];
+    const teamId = award?.teamId;
+    if (!award || teamId === undefined) continue;
     const wins = leaderboard.winsByTeamId[key].get(teamId) ?? 0;
     const isRepeatWinner = wins >= 2;
     const isShownOnLeaderboard = wins >= MIN_WINS_TO_LEAD[key];
-    if (isRepeatWinner && isShownOnLeaderboard) lines.push(`- ${awards[key].team} has now won ${AWARDS[key].name} ${wins} times this season (including this week).`);
+    if (isRepeatWinner && isShownOnLeaderboard) lines.push(`- ${award.team} has now won ${AWARDS[key].name} ${wins} times this season (including this week).`);
   }
   for (const key of SEASON_AWARD_KEYS) {
     const leader = leaderboard.leaders[key];

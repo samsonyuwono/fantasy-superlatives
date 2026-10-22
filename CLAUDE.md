@@ -1,6 +1,6 @@
 # Fantasy Superlatives
 
-Personal project. Every Tuesday it emails a recap of the past NFL week for each of my ESPN fantasy leagues: seven computed awards plus a short Claude-written roast. I paste it into the league WhatsApp groups.
+Personal project. Every Tuesday it emails a recap of the past NFL week for each of my ESPN fantasy leagues: seven computed awards (plus up to three bonus awards when someone earns them) and a short Claude-written roast.
 
 ## Map
 - `src/recap.ts`: the entrypoint. Runs each league in `leagues.json` independently; one league failing never blocks another, and each failure emails `OWNER_ALERT_EMAIL`.

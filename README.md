@@ -17,8 +17,16 @@ configured league, computes a set of custom awards, has **Claude** write a short
 | 🍀 **Backed Into It** | Luckiest win (won the matchup, but would've beaten the fewest teams) |
 | 😤 **Robbed** | Unluckiest loss (lost the matchup, but would've beaten the most teams) |
 
+Bonus awards only appear in a week when someone earns them:
+
+| Award | Meaning |
+|---|---|
+| 💔 **Heartbreaker** | Closest loss, if it was by 5 points or less |
+| 🏳️ **Mercy Rule** | Winner of the biggest blowout, if it was by 60 points or more |
+| 🪖 **One-Man Army** | One starter scored 35% or more of their team's points |
+
 Below the weekly awards, a **season leaderboard** shows which team has won each award most often so far
-(Baller of the Week is left out, since it's about one player). The roast can call back to it ("third Corpse this season").
+(Baller of the Week and One-Man Army are left out, since they're about one player). The roast can call back to it ("third Corpse this season").
 
 ## How it works
 
@@ -34,7 +42,7 @@ leagues.json ─► for each league: ESPN box scores ─► awards.ts ─► Cla
 - `src/roast.ts`: Claude writes the prose from a fixed fact sheet. `ROAST_PIPELINE` picks how:
   - `off`: one Claude call.
   - `shadow` (the default): sends that one call's roast, and also runs the pipeline below and logs what it would have sent.
-  - `on`: the pipeline. An analyst picks storylines, a writer drafts, and each draft must pass a code check (`src/factcheck.ts`: every number is in the fact sheet and every award is named) and a Claude checker (`src/agents.ts`). A rejected draft goes back to the writer with the issues, up to 3 drafts. If all fail, the single-call roast is sent.
+  - `on`: the pipeline. An analyst picks storylines, a writer drafts, and each draft must pass a code check (`src/factcheck.ts`: every number is in the fact sheet and every award except the bonus awards is named) and a Claude checker (`src/agents.ts`). A rejected draft goes back to the writer with the issues, up to 3 drafts. If all fail, the single-call roast is sent.
   In CI it's a repo variable: `gh variable set ROAST_PIPELINE --body on`, or `off` to roll back.
 - `src/format.ts` / `src/emailer.ts`: build the plain-text body and send it via Resend.
 - `src/week.ts`: works out the week from each league's `seasonWeek1Tuesday` and enforces the Weeks 1–14 gate.
