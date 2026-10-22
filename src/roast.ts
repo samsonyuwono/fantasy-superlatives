@@ -1,12 +1,3 @@
-/**
- * Turns the computed awards into a short, punchy group-chat roast via the Claude API.
- * The key facts are computed deterministically in `awards.ts`; Claude only writes the prose.
- *
- * With `ROAST_PIPELINE=on`, an orchestrated pipeline writes it: an analyst picks storylines, a writer
- * drafts, and each draft must pass a code check (`factcheck.ts`) and a Claude checker, or it goes
- * back to the writer with the issues. If every draft fails, the single-call roast is sent instead.
- * `shadow` (the default) sends the single-call roast and only logs what the pipeline would have sent.
- */
 import Anthropic from '@anthropic-ai/sdk';
 import {
   AWARDS,
@@ -28,36 +19,31 @@ export interface RoastOptions {
   league?: string;
 }
 
-/** e.g. "2 of the other 9 teams", or "2 of the other 9 teams and tied 1". */
 function allPlayText(record: AllPlayRecord): string {
-  const base = `${record.beaten} of the other ${record.opponents} teams`;
+  const base = `${record.beaten} of the other ${record.otherTeams} teams`;
   return record.tied > 0 ? `${base} and tied ${record.tied}` : base;
 }
 
 const formatPoints = (points: number) => points.toFixed(1);
 
-/** The two ways an award's mistake is described, e.g. for the Sleepwalker. */
 interface Mistake {
-  /** "the points left on the bench" */
   what: string;
-  /** "their best lineup" */
   fix: string;
 }
 
 const SLEEPWALKER_MISTAKE: Mistake = { what: 'the points left on the bench', fix: 'their best lineup' };
 const BONEHEAD_MISTAKE: Mistake = { what: 'that start/sit', fix: 'the right start/sit' };
 
-/** e.g. "Delta still won 80.0–75.0 over Echo, so the points left on the bench didn't cost them the game." */
 function outcomeText(team: string, outcome: MatchupOutcome | undefined, { what, fix }: Mistake): string {
   if (!outcome) return '';
   const finalScore = `${formatPoints(outcome.score)}–${formatPoints(outcome.opponentScore)}`;
   if (outcome.result === 'won') return ` ${team} still won ${finalScore} over ${outcome.opponent}, so ${what} didn't cost them the game.`;
   if (outcome.result === 'tied') {
-    return outcome.flipped
+    return outcome.mistakeCostTheWin
       ? ` ${team} tied ${outcome.opponent} at ${formatPoints(outcome.score)}, and with ${fix} they would have won.`
       : ` ${team} tied ${outcome.opponent} at ${formatPoints(outcome.score)}, so ${what} didn't cost them the win.`;
   }
-  return outcome.flipped
+  return outcome.mistakeCostTheWin
     ? ` ${team} lost ${finalScore} to ${outcome.opponent}, and with ${fix} they would have won.`
     : ` ${team} lost ${finalScore} to ${outcome.opponent}, and would have lost even with ${fix}.`;
 }
@@ -98,15 +84,15 @@ export function factSheet(awards: WeekAwards, leaderboard?: SeasonLeaderboard): 
   return lines.join('\n');
 }
 
-/** Season-to-date facts: repeat winners from this week, then each award's season leader. */
 function seasonFacts(awards: WeekAwards, leaderboard: SeasonLeaderboard): string[] {
   const lines = [`Season so far (${describeWeeks(leaderboard.weeks)}):`];
   for (const key of SEASON_AWARD_KEYS) {
     const teamId = awards[key].teamId;
     if (teamId === undefined) continue;
-    const wins = leaderboard.counts[key].get(teamId) ?? 0;
-    // Only repeat winners, and only once the award would show on the leaderboard.
-    if (wins >= Math.max(2, MIN_WINS_TO_LEAD[key])) lines.push(`- ${awards[key].team} has now won ${AWARDS[key].name} ${wins} times this season (including this week).`);
+    const wins = leaderboard.winsByTeamId[key].get(teamId) ?? 0;
+    const isRepeatWinner = wins >= 2;
+    const isShownOnLeaderboard = wins >= MIN_WINS_TO_LEAD[key];
+    if (isRepeatWinner && isShownOnLeaderboard) lines.push(`- ${awards[key].team} has now won ${AWARDS[key].name} ${wins} times this season (including this week).`);
   }
   for (const key of SEASON_AWARD_KEYS) {
     const leader = leaderboard.leaders[key];
@@ -131,16 +117,15 @@ export function parsePipelineMode(value: string | undefined, warn: (message: str
 export const MAX_ATTEMPTS = 3;
 
 export interface PipelineResult {
-  /** The approved roast, or null when every draft was rejected or an agent failed. */
   roast: string | null;
-  /** One line describing what each agent did, for the logs. */
   trace: string;
 }
 
 /**
  * Runs analyst → writer → code check → Claude checker, sending rejected drafts back to the writer
  * with the issues. Never throws: a failing writer or checker call uses up that attempt, and the run
- * ends with `roast: null` once every attempt is used.
+ * ends with `roast: null` once every attempt is used. `trace` is one log line describing what each
+ * agent did.
  */
 export async function runPipeline(sheet: string, agents: Agents): Promise<PipelineResult> {
   const steps: string[] = [];
@@ -196,17 +181,14 @@ function quote(issues: string[]): string {
 
 export interface RoastDependencies {
   agents: Agents;
-  /** Today's single-call roast. It's the fallback, and what shadow mode sends. */
   legacy(sheet: string): Promise<string>;
   log(message: string): void;
 }
 
-// Per request, before the SDK's retries. The SDK default is 10 minutes, and a roast call takes seconds,
-// so a hung call fails fast into the next attempt or the fallback.
-const CLAUDE_TIMEOUT_MS = 90_000;
+const CLAUDE_REQUEST_TIMEOUT_MILLISECONDS = 90_000;
 
 function claudeDependencies(options: RoastOptions): RoastDependencies {
-  const client = new Anthropic({ apiKey: options.apiKey, timeout: CLAUDE_TIMEOUT_MS });
+  const client = new Anthropic({ apiKey: options.apiKey, timeout: CLAUDE_REQUEST_TIMEOUT_MILLISECONDS });
   return {
     agents: claudeAgents(client, options.model),
     legacy: (sheet) => callClaude(client, options.model, { system: ROAST_PROMPT, user: sheet }),
@@ -215,8 +197,20 @@ function claudeDependencies(options: RoastOptions): RoastDependencies {
 }
 
 /**
- * Generate the roast text, according to `options.pipeline`. Throws only if the roast that would be
- * sent fails (the caller decides how to handle it); a failing pipeline never blocks the send.
+ * Generate the roast text from a fixed fact sheet, according to `options.pipeline`. The key facts are
+ * computed deterministically in `awards.ts`; Claude only writes the prose.
+ *
+ * - `off`: the single-call roast (`legacy`) only. The instant rollback.
+ * - `shadow` (the default): sends the single-call roast and runs the pipeline in the background, only
+ *   logging what it would have sent. It isn't awaited, so it never delays the send; it logs whenever it
+ *   finishes, and the process stays alive until then.
+ * - `on`: an orchestrated pipeline writes it: an analyst picks storylines, a writer drafts, and each
+ *   draft must pass a code check (`factcheck.ts`) and a Claude checker, or it goes back to the writer
+ *   with the issues. If every draft fails, the single-call roast is sent instead.
+ *
+ * Each Claude request times out after 90 seconds (before the SDK's retries; its default is 10 minutes),
+ * so a hung call fails fast into the next attempt or the fallback. Throws only if the roast that would
+ * be sent fails (the caller decides how to handle it); a failing pipeline never blocks the send.
  */
 export async function generateRoast(
   awards: WeekAwards,
@@ -231,8 +225,6 @@ export async function generateRoast(
   if (mode === 'off') return dependencies.legacy(sheet);
 
   if (mode === 'shadow') {
-    // Not awaited, so a slow pipeline never delays the send. It logs whenever it finishes, and the
-    // process stays alive until then.
     void runPipeline(sheet, dependencies.agents).then(
       ({ roast, trace }) => {
         log(`[shadow] ${trace}`);

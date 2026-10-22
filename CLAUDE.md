@@ -4,7 +4,7 @@ Personal project. Every Tuesday it emails a recap of the past NFL week for each 
 
 ## Map
 - `src/recap.ts`: the entrypoint. Runs each league in `leagues.json` independently; one league failing never blocks another, and each failure emails `OWNER_ALERT_EMAIL`.
-- Pipeline: `espn.ts` (the only module that talks to ESPN) → `awards.ts` (pure logic) → `leaderboard.ts` (season tally; there's no storage, so each run fetches Weeks 1..N again, and a failure here sends the recap without it) → `roast.ts` (Claude writes the roast from a fixed fact sheet; the agent pipeline is described at the top of the file) → `format.ts` / `emailer.ts` (Resend).
+- Pipeline: `espn.ts` (the only module that talks to ESPN) → `awards.ts` (pure logic) → `leaderboard.ts` (season tally; there's no storage, so each run fetches Weeks 1..N again, and a failure here sends the recap without it) → `roast.ts` (Claude writes the roast from a fixed fact sheet; the agent pipeline is described in `generateRoast`'s JSDoc) → `format.ts` / `emailer.ts` (Resend).
 - `config.ts`: joins the committed `leagues.json` (non-secret) with the `LEAGUE_SECRETS_JSON` env var (ESPN cookies, keyed by league `id`).
 - `week.ts`: the week number comes from each league's `seasonWeek1Tuesday`; sends are limited to Weeks 1–14.
 - `guard.ts`: dedupe logic for the fallback schedule (see below).
@@ -27,3 +27,4 @@ Personal project. Every Tuesday it emails a recap of the past NFL week for each 
 - Never commit or push without my explicit OK for that specific change. `main` is live, since the Tuesday run uses it.
 - Use Conventional Commits with a meaningful scope or none, e.g. `ci(schedule): ...`.
 - Use the `gh` CLI for GitHub.
+- Code should explain itself through its names and structure, without comments. If something isn't clear from the code, rename the variable or function until it is. Name variables, functions and parameters with full words, never abbreviations or single letters (`player`, not `pl` or `p`; `config`, not `cfg`; `error`, not `err`). The exceptions are loop indexes like `i`, generic type parameters like `T`, and names set by Node or ESPN (`__dirname`, `swid`). Only exported functions and variables get JSDoc; types and interfaces don't, even when exported.

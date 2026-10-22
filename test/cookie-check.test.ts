@@ -13,8 +13,8 @@ const league = (id: string, seasonWeek1Tuesday: string): LeagueConfig => ({
   recipientEmails: ['a@example.com'],
 });
 
-// Week 1's recap goes out Tuesday 2026-09-15, so Week N's goes out 7·(N−1) days later.
-const leagues = [league('main', '2026-09-15')];
+const WEEK_1_RECAP_TUESDAY = '2026-09-15';
+const leagues = [league('main', WEEK_1_RECAP_TUESDAY)];
 const monday = (iso: string) => new Date(`${iso}T16:00:00Z`);
 
 describe('leaguesDueForCheck', () => {
@@ -36,7 +36,7 @@ describe('leaguesDueForCheck', () => {
 
   it('only returns the leagues that are in season', () => {
     const mixed = [league('main', '2026-09-15'), league('old', '2025-09-09')];
-    expect(leaguesDueForCheck(mixed, monday('2026-09-21'), false).map((l) => l.id)).toEqual(['main']);
+    expect(leaguesDueForCheck(mixed, monday('2026-09-21'), false).map((dueLeague) => dueLeague.id)).toEqual(['main']);
   });
 
   it('checks every league with force, even out of season', () => {
@@ -82,7 +82,7 @@ describe('classifyFailure', () => {
 describe('espnCheckAlertContent', () => {
   const main = { id: 'main', displayName: 'Main League' };
   const second = { id: 'second', displayName: 'Chicken Rice & Chopped Cheese' };
-  const cookieFailure = (l: typeof main): CheckFailure => ({ league: l, error: new Error('status code 401'), kind: 'cookies' });
+  const cookieFailure = (failedLeague: typeof main): CheckFailure => ({ league: failedLeague, error: new Error('status code 401'), kind: 'cookies' });
   const sharedAccount = { accounts: [['main', 'second']], missing: [] };
 
   it('calls it a cookie problem when every failure is one', () => {

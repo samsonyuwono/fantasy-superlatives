@@ -17,8 +17,8 @@ describe('required', () => {
 
 describe('githubRunUrl', () => {
   it('builds the run link inside GitHub Actions', () => {
-    const env = { GITHUB_SERVER_URL: 'https://github.com', GITHUB_REPOSITORY: 'me/repo', GITHUB_RUN_ID: '42' };
-    expect(githubRunUrl(env)).toBe('https://github.com/me/repo/actions/runs/42');
+    const actionsEnvironment = { GITHUB_SERVER_URL: 'https://github.com', GITHUB_REPOSITORY: 'me/repo', GITHUB_RUN_ID: '42' };
+    expect(githubRunUrl(actionsEnvironment)).toBe('https://github.com/me/repo/actions/runs/42');
   });
 
   it('returns undefined outside Actions, or when any part is missing', () => {

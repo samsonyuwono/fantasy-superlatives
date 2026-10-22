@@ -1,8 +1,3 @@
-/**
- * Multi-league config: parses the committed `leagues.json` (non-secret) and the
- * `LEAGUE_SECRETS_JSON` env var (one GitHub Secret holding every league's ESPN cookies,
- * keyed by league id) and resolves the two into the `EspnConfig` each league's fetch needs.
- */
 import type { EspnConfig } from './espn.js';
 
 export interface LeagueConfig {
@@ -12,7 +7,6 @@ export interface LeagueConfig {
   seasonYear: number;
   seasonWeek1Tuesday: string;
   recipientEmails: string[];
-  /** Public ESPN leagues need no cookies at all. Defaults to true. */
   requiresAuth?: boolean;
 }
 
@@ -21,8 +15,8 @@ export interface LeagueSecrets {
   swid: string;
 }
 
-function isNonEmptyString(v: unknown): v is string {
-  return typeof v === 'string' && v.length > 0;
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
 }
 
 function parseLeagueConfig(raw: unknown, index: number): LeagueConfig {
@@ -30,32 +24,36 @@ function parseLeagueConfig(raw: unknown, index: number): LeagueConfig {
   if (typeof raw !== 'object' || raw === null) {
     throw new Error(`${label} must be an object`);
   }
-  const l = raw as Record<string, unknown>;
+  const league = raw as Record<string, unknown>;
 
-  if (!isNonEmptyString(l.id)) throw new Error(`${label}: missing or invalid "id"`);
-  const id = l.id;
+  if (!isNonEmptyString(league.id)) throw new Error(`${label}: missing or invalid "id"`);
+  const id = league.id;
 
-  if (!isNonEmptyString(l.displayName)) throw new Error(`League "${id}": missing or invalid "displayName"`);
-  if (typeof l.leagueId !== 'number') throw new Error(`League "${id}": missing or invalid "leagueId"`);
-  if (typeof l.seasonYear !== 'number') throw new Error(`League "${id}": missing or invalid "seasonYear"`);
-  if (!isNonEmptyString(l.seasonWeek1Tuesday)) {
+  if (!isNonEmptyString(league.displayName)) throw new Error(`League "${id}": missing or invalid "displayName"`);
+  if (typeof league.leagueId !== 'number') throw new Error(`League "${id}": missing or invalid "leagueId"`);
+  if (typeof league.seasonYear !== 'number') throw new Error(`League "${id}": missing or invalid "seasonYear"`);
+  if (!isNonEmptyString(league.seasonWeek1Tuesday)) {
     throw new Error(`League "${id}": missing or invalid "seasonWeek1Tuesday"`);
   }
-  if (!Array.isArray(l.recipientEmails) || l.recipientEmails.length === 0 || !l.recipientEmails.every(isNonEmptyString)) {
+  if (
+    !Array.isArray(league.recipientEmails) ||
+    league.recipientEmails.length === 0 ||
+    !league.recipientEmails.every(isNonEmptyString)
+  ) {
     throw new Error(`League "${id}": "recipientEmails" must be a non-empty array of strings`);
   }
-  if (l.requiresAuth !== undefined && typeof l.requiresAuth !== 'boolean') {
+  if (league.requiresAuth !== undefined && typeof league.requiresAuth !== 'boolean') {
     throw new Error(`League "${id}": "requiresAuth" must be a boolean if present`);
   }
 
   return {
     id,
-    displayName: l.displayName,
-    leagueId: l.leagueId,
-    seasonYear: l.seasonYear,
-    seasonWeek1Tuesday: l.seasonWeek1Tuesday,
-    recipientEmails: l.recipientEmails as string[],
-    requiresAuth: l.requiresAuth as boolean | undefined,
+    displayName: league.displayName,
+    leagueId: league.leagueId,
+    seasonYear: league.seasonYear,
+    seasonWeek1Tuesday: league.seasonWeek1Tuesday,
+    recipientEmails: league.recipientEmails as string[],
+    requiresAuth: league.requiresAuth as boolean | undefined,
   };
 }
 
@@ -64,54 +62,58 @@ export function parseLeaguesJson(raw: string): LeagueConfig[] {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
-  } catch (err) {
-    throw new Error(`leagues.json is not valid JSON: ${err instanceof Error ? err.message : err}`);
+  } catch (error) {
+    throw new Error(`leagues.json is not valid JSON: ${error instanceof Error ? error.message : error}`);
   }
 
-  const leaguesRaw = (parsed as { leagues?: unknown })?.leagues;
-  if (!Array.isArray(leaguesRaw)) {
+  const rawLeagues = (parsed as { leagues?: unknown })?.leagues;
+  if (!Array.isArray(rawLeagues)) {
     throw new Error('leagues.json must have a top-level "leagues" array');
   }
 
-  const leagues = leaguesRaw.map((l, i) => parseLeagueConfig(l, i));
+  const leagues = rawLeagues.map((rawLeague, index) => parseLeagueConfig(rawLeague, index));
 
-  const seen = new Set<string>();
-  for (const l of leagues) {
-    if (seen.has(l.id)) throw new Error(`Duplicate league id in leagues.json: "${l.id}"`);
-    seen.add(l.id);
+  const seenIds = new Set<string>();
+  for (const league of leagues) {
+    if (seenIds.has(league.id)) throw new Error(`Duplicate league id in leagues.json: "${league.id}"`);
+    seenIds.add(league.id);
   }
 
   return leagues;
 }
 
-/** Parse the `LEAGUE_SECRETS_JSON` secret: an object keyed by league id. */
+/**
+ * Parse the `LEAGUE_SECRETS_JSON` secret: one GitHub Secret holding every league's ESPN
+ * cookies, as an object keyed by league id.
+ */
 export function parseLeagueSecretsJson(raw: string): Record<string, LeagueSecrets> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
-  } catch (err) {
-    throw new Error(`LEAGUE_SECRETS_JSON is not valid JSON: ${err instanceof Error ? err.message : err}`);
+  } catch (error) {
+    throw new Error(`LEAGUE_SECRETS_JSON is not valid JSON: ${error instanceof Error ? error.message : error}`);
   }
 
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     throw new Error('LEAGUE_SECRETS_JSON must be a JSON object keyed by league id');
   }
 
-  const result: Record<string, LeagueSecrets> = {};
+  const secretsByLeagueId: Record<string, LeagueSecrets> = {};
   for (const [id, value] of Object.entries(parsed as Record<string, unknown>)) {
-    const v = value as Record<string, unknown>;
-    if (!isNonEmptyString(v?.espnS2) || !isNonEmptyString(v?.swid)) {
+    const cookies = value as Record<string, unknown>;
+    if (!isNonEmptyString(cookies?.espnS2) || !isNonEmptyString(cookies?.swid)) {
       throw new Error(`LEAGUE_SECRETS_JSON["${id}"] must have string "espnS2" and "swid"`);
     }
-    result[id] = { espnS2: v.espnS2, swid: v.swid };
+    secretsByLeagueId[id] = { espnS2: cookies.espnS2, swid: cookies.swid };
   }
-  return result;
+  return secretsByLeagueId;
 }
 
 /**
- * Resolve one league's ESPN cookies from the secrets map. Throws a league-named error if
- * auth is required (the default) and no matching secret entry exists — a missing entry
- * should be a loud config error, not a silent unauthenticated fetch against a private league.
+ * Resolve one league's ESPN cookies from the secrets map. `requiresAuth` defaults to true;
+ * only a public ESPN league, which needs no cookies, sets it to false. Throws a league-named
+ * error if auth is required and no matching secret entry exists — a missing entry should be
+ * a loud config error, not a silent unauthenticated fetch against a private league.
  */
 export function resolveEspnConfig(league: LeagueConfig, secrets: Record<string, LeagueSecrets>): EspnConfig {
   const entry = secrets[league.id];

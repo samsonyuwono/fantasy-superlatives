@@ -1,7 +1,3 @@
-/**
- * The specialist Claude agents behind the roast pipeline. Each agent is one Claude call with its
- * own system prompt; `roast.ts` decides the order they run in and what happens when one rejects.
- */
 import Anthropic from '@anthropic-ai/sdk';
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema';
 import { MAX_FREE_NUMBER } from './factcheck.js';
@@ -17,11 +13,8 @@ export interface Verdict {
 }
 
 export interface Agents {
-  /** Picks the best angles for this week's roast. */
   analyst(sheet: string): Promise<string[]>;
-  /** Writes the roast, or rewrites a rejected draft when given its issues. */
   writer(sheet: string, storylines: string[], revision?: Revision): Promise<string>;
-  /** Checks a draft against the fact sheet for mistakes a code check can't see. */
   checker(sheet: string, draft: string): Promise<Verdict>;
 }
 
@@ -74,7 +67,7 @@ interface Call {
   user: string;
 }
 
-const BASE_PARAMS = {
+const BASE_PARAMETERS = {
   max_tokens: 4096,
 } as const;
 
@@ -84,12 +77,14 @@ function assertFinished(message: Anthropic.Message): void {
   }
 }
 
-/** One plain-text Claude call. Throws if it doesn't finish or comes back empty. */
+/**
+ * One plain-text Claude call at low effort, since a short roast doesn't need deep reasoning and low
+ * effort is faster and cheaper. Throws if it doesn't finish or comes back empty.
+ */
 export async function callClaude(client: Anthropic, model: string, { system, user }: Call): Promise<string> {
   const message = await client.messages.create({
-    ...BASE_PARAMS,
+    ...BASE_PARAMETERS,
     model,
-    // A short roast doesn't need deep reasoning; low effort is faster and cheaper.
     output_config: { effort: 'low' },
     system,
     messages: [{ role: 'user', content: user }],
@@ -125,12 +120,17 @@ function writerPrompt(sheet: string, storylines: string[], revision?: Revision):
   return parts.join('\n');
 }
 
-/** The real agents, each backed by a Claude call. */
+/**
+ * The specialist agents behind the roast pipeline, each one Claude call with its own system prompt:
+ * the analyst picks the best angles for this week's roast, the writer writes it (or rewrites a rejected
+ * draft from its issues), and the checker compares a draft with the fact sheet for mistakes a code
+ * check can't see. `roast.ts` decides the order they run in and what happens when one rejects.
+ */
 export function claudeAgents(client: Anthropic, model: string): Agents {
   return {
     async analyst(sheet) {
       const message = await client.messages.parse({
-        ...BASE_PARAMS,
+        ...BASE_PARAMETERS,
         model,
         output_config: { effort: 'low', format: STORYLINES_FORMAT },
         system: ANALYST_PROMPT,
@@ -147,7 +147,7 @@ export function claudeAgents(client: Anthropic, model: string): Agents {
 
     async checker(sheet, draft) {
       const message = await client.messages.parse({
-        ...BASE_PARAMS,
+        ...BASE_PARAMETERS,
         model,
         output_config: { effort: 'low', format: VERDICT_FORMAT },
         system: CHECKER_PROMPT,

@@ -1,8 +1,3 @@
-/**
- * Season-to-date leaderboard ("Hall of Shame"). Pure logic: recomputes every week's awards
- * from the normalized matchups and tallies them. There's no storage in CI, so the caller
- * re-fetches Weeks 1..N from ESPN on each run and passes them all in.
- */
 import { computeAwards, type NormalizedMatchup } from './awards.js';
 
 /**
@@ -39,14 +34,10 @@ export interface WeekMatchups {
 }
 
 export interface SeasonLeaderboard {
-  /** Weeks that were tallied, ascending. Weeks with no scores are left out. */
   weeks: number[];
-  /** Most wins of each award; tied teams are all listed. null until someone reaches MIN_WINS_TO_LEAD. */
   leaders: Record<SeasonAwardKey, { teams: string[]; count: number } | null>;
-  /** Wins of each award by teamId. */
-  counts: Record<SeasonAwardKey, Map<number, number>>;
-  /** Each team's name as of the latest week it appears in. Earlier weeks are fetched without names. */
-  nameById: Map<number, string>;
+  winsByTeamId: Record<SeasonAwardKey, Map<number, number>>;
+  latestNameByTeamId: Map<number, string>;
 }
 
 /**
@@ -58,55 +49,65 @@ export function describeWeeks(weeks: number[]): string {
   const last = weeks[weeks.length - 1]!;
   if (first === last) return `Week ${first}`;
   const skipped: number[] = [];
-  for (let w = first; w <= last; w++) if (!weeks.includes(w)) skipped.push(w);
+  for (let week = first; week <= last; week++) if (!weeks.includes(week)) skipped.push(week);
   const range = `Weeks ${first}–${last}`;
   return skipped.length ? `${range}, skipping ${skipped.join(', ')}` : range;
 }
 
-/** Tally the awards over the given weeks. Returns undefined when none of them has scores yet. */
+const hasAnyScore = (week: WeekMatchups): boolean =>
+  week.matchups.some((matchup) => matchup.home.score !== 0 || matchup.away.score !== 0);
+
+/**
+ * The season-to-date leaderboard ("Hall of Shame"): recomputes every week's awards and tallies
+ * them. There's no storage in CI, so the caller re-fetches Weeks 1..N from ESPN on each run and
+ * passes them all in, in any order. Weeks with no scores are left out, and it returns undefined
+ * when none has scores yet. Wins are counted by teamId and shown under each team's name from the
+ * latest week it appears in. An award's leader lists every tied team, and is null until someone
+ * reaches MIN_WINS_TO_LEAD.
+ */
 export function buildLeaderboard(weeks: WeekMatchups[]): SeasonLeaderboard | undefined {
   const played = weeks
-    .filter((w) => w.matchups.some((m) => m.home.score !== 0 || m.away.score !== 0))
-    .sort((a, b) => a.week - b.week);
+    .filter(hasAnyScore)
+    .sort((earlier, later) => earlier.week - later.week);
   if (played.length === 0) return undefined;
 
-  const counts = Object.fromEntries(SEASON_AWARD_KEYS.map((k) => [k, new Map<number, number>()])) as Record<
+  const winsByTeamId = Object.fromEntries(SEASON_AWARD_KEYS.map((key) => [key, new Map<number, number>()])) as Record<
     SeasonAwardKey,
     Map<number, number>
   >;
-  const nameById = new Map<number, string>();
+  const latestNameByTeamId = new Map<number, string>();
 
   for (const { week, matchups } of played) {
-    for (const team of matchups.flatMap((m) => [m.home, m.away])) {
-      nameById.set(team.teamId, team.name);
+    for (const team of matchups.flatMap((matchup) => [matchup.home, matchup.away])) {
+      latestNameByTeamId.set(team.teamId, team.name);
     }
     const awards = computeAwards(matchups, week);
     for (const key of SEASON_AWARD_KEYS) {
       const teamId = awards[key].teamId;
       if (teamId === undefined) continue;
-      counts[key].set(teamId, (counts[key].get(teamId) ?? 0) + 1);
+      winsByTeamId[key].set(teamId, (winsByTeamId[key].get(teamId) ?? 0) + 1);
     }
   }
 
-  const nameOf = (teamId: number) => nameById.get(teamId) ?? `Team ${teamId}`;
+  const nameOf = (teamId: number) => latestNameByTeamId.get(teamId) ?? `Team ${teamId}`;
 
   const leaders = Object.fromEntries(
     SEASON_AWARD_KEYS.map((key) => {
-      const tally = counts[key];
+      const tally = winsByTeamId[key];
       const count = Math.max(0, ...tally.values());
       if (count < MIN_WINS_TO_LEAD[key]) return [key, null];
       const teams = [...tally]
-        .filter(([, c]) => c === count)
-        .map(([id]) => nameOf(id))
-        .sort((a, b) => a.localeCompare(b));
+        .filter(([, wins]) => wins === count)
+        .map(([teamId]) => nameOf(teamId))
+        .sort((first, second) => first.localeCompare(second));
       return [key, { teams, count }];
     }),
   ) as SeasonLeaderboard['leaders'];
 
   return {
-    weeks: played.map((w) => w.week),
+    weeks: played.map((playedWeek) => playedWeek.week),
     leaders,
-    counts,
-    nameById,
+    winsByTeamId,
+    latestNameByTeamId,
   };
 }
