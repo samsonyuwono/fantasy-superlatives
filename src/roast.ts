@@ -8,16 +8,18 @@
  * `shadow` (the default) sends the single-call roast and only logs what the pipeline would have sent.
  */
 import Anthropic from '@anthropic-ai/sdk';
-import { slotLabel, type AllPlayRecord, type MatchupOutcome, type MatchupResult, type WeekAwards } from './awards.js';
+import {
+  AWARDS,
+  slotLabel,
+  type AllPlayRecord,
+  type AwardKey,
+  type MatchupOutcome,
+  type MatchupResult,
+  type WeekAwards,
+} from './awards.js';
 import { callClaude, claudeAgents, ROAST_PROMPT, type Agents, type Revision } from './agents.js';
 import { verifyDraft } from './factcheck.js';
-import {
-  describeWeeks,
-  MIN_WINS_TO_LEAD,
-  SEASON_AWARD_KEYS,
-  SEASON_AWARD_NAMES,
-  type SeasonLeaderboard,
-} from './leaderboard.js';
+import { describeWeeks, MIN_WINS_TO_LEAD, SEASON_AWARD_KEYS, type SeasonLeaderboard } from './leaderboard.js';
 
 export interface RoastOptions {
   apiKey: string;
@@ -66,22 +68,30 @@ function resultLine(result: MatchupResult): string {
   return `- ${winner} beat ${loser}, ${formatPoints(winnerScore)}–${formatPoints(loserScore)} (by ${formatPoints(winnerScore - loserScore)})`;
 }
 
+const awardFact = (key: AwardKey, detail: string) => `- ${AWARDS[key].name} (${AWARDS[key].description}): ${detail}`;
+
 /** A compact, unambiguous fact sheet for the model — no room to hallucinate the numbers. */
 export function factSheet(awards: WeekAwards, leaderboard?: SeasonLeaderboard): string {
   const lines = [
     `Week ${awards.week} fantasy football results. The award names are fixed — use them verbatim.`,
     '',
-    `- The Juggernaut (highest team score): ${awards.juggernaut.team} — ${formatPoints(awards.juggernaut.score)} pts`,
-    `- The Corpse (lowest team score): ${awards.corpse.team} — ${formatPoints(awards.corpse.score)} pts`,
-    `- Baller of the Week (top individual starter): ${awards.ballerOfTheWeek.player} on ${awards.ballerOfTheWeek.team} — ${formatPoints(awards.ballerOfTheWeek.points)} pts`,
-    `- The Sleepwalker (most points left on the bench): ${awards.sleepwalker.team} — left ${formatPoints(awards.sleepwalker.pointsLeft)} pts on the bench (started ${formatPoints(awards.sleepwalker.actual)}, optimal was ${formatPoints(awards.sleepwalker.optimal)}).${outcomeText(awards.sleepwalker.team, awards.sleepwalker.matchup, SLEEPWALKER_MISTAKE)}`,
-    `- The Bonehead (worst start/sit): ${awards.bonehead.team} benched ${awards.bonehead.benched} (${formatPoints(awards.bonehead.benchedPoints)}) and started ${awards.bonehead.started} (${formatPoints(awards.bonehead.startedPoints)}) at ${slotLabel(awards.bonehead.slot)} — a ${formatPoints(awards.bonehead.regret)}-pt blunder.${outcomeText(awards.bonehead.team, awards.bonehead.matchup, BONEHEAD_MISTAKE)}`,
-    awards.backedIntoIt.teamId === undefined
-      ? '- Backed Into It (luckiest win): nobody, since every matchup this week was a tie'
-      : `- Backed Into It (luckiest win): ${awards.backedIntoIt.team} won with ${formatPoints(awards.backedIntoIt.score)} pts (would have beaten ${allPlayText(awards.backedIntoIt.allPlay)})`,
-    awards.robbed.teamId === undefined
-      ? '- Robbed (unluckiest loss): nobody, since every matchup this week was a tie'
-      : `- Robbed (unluckiest loss): ${awards.robbed.team} lost with ${formatPoints(awards.robbed.score)} pts (would have beaten ${allPlayText(awards.robbed.allPlay)})`,
+    awardFact('juggernaut', `${awards.juggernaut.team} — ${formatPoints(awards.juggernaut.score)} pts`),
+    awardFact('corpse', `${awards.corpse.team} — ${formatPoints(awards.corpse.score)} pts`),
+    awardFact('ballerOfTheWeek', `${awards.ballerOfTheWeek.player} on ${awards.ballerOfTheWeek.team} — ${formatPoints(awards.ballerOfTheWeek.points)} pts`),
+    awardFact('sleepwalker', `${awards.sleepwalker.team} — left ${formatPoints(awards.sleepwalker.pointsLeft)} pts on the bench (started ${formatPoints(awards.sleepwalker.actual)}, optimal was ${formatPoints(awards.sleepwalker.optimal)}).${outcomeText(awards.sleepwalker.team, awards.sleepwalker.matchup, SLEEPWALKER_MISTAKE)}`),
+    awardFact('bonehead', `${awards.bonehead.team} benched ${awards.bonehead.benched} (${formatPoints(awards.bonehead.benchedPoints)}) and started ${awards.bonehead.started} (${formatPoints(awards.bonehead.startedPoints)}) at ${slotLabel(awards.bonehead.slot)} — a ${formatPoints(awards.bonehead.regret)}-pt blunder.${outcomeText(awards.bonehead.team, awards.bonehead.matchup, BONEHEAD_MISTAKE)}`),
+    awardFact(
+      'backedIntoIt',
+      awards.backedIntoIt.teamId === undefined
+        ? 'nobody, since every matchup this week was a tie'
+        : `${awards.backedIntoIt.team} won with ${formatPoints(awards.backedIntoIt.score)} pts (would have beaten ${allPlayText(awards.backedIntoIt.allPlay)})`,
+    ),
+    awardFact(
+      'robbed',
+      awards.robbed.teamId === undefined
+        ? 'nobody, since every matchup this week was a tie'
+        : `${awards.robbed.team} lost with ${formatPoints(awards.robbed.score)} pts (would have beaten ${allPlayText(awards.robbed.allPlay)})`,
+    ),
   ];
   if (awards.results.length > 0) lines.push('', 'Matchup results:', ...awards.results.map(resultLine));
   if (leaderboard) lines.push('', ...seasonFacts(awards, leaderboard));
@@ -96,11 +106,11 @@ function seasonFacts(awards: WeekAwards, leaderboard: SeasonLeaderboard): string
     if (teamId === undefined) continue;
     const wins = leaderboard.counts[key].get(teamId) ?? 0;
     // Only repeat winners, and only once the award would show on the leaderboard.
-    if (wins >= Math.max(2, MIN_WINS_TO_LEAD[key])) lines.push(`- ${awards[key].team} has now won ${SEASON_AWARD_NAMES[key]} ${wins} times this season (including this week).`);
+    if (wins >= Math.max(2, MIN_WINS_TO_LEAD[key])) lines.push(`- ${awards[key].team} has now won ${AWARDS[key].name} ${wins} times this season (including this week).`);
   }
   for (const key of SEASON_AWARD_KEYS) {
     const leader = leaderboard.leaders[key];
-    if (leader) lines.push(`- Season leader for ${SEASON_AWARD_NAMES[key]}: ${leader.teams.join(' and ')} with ${leader.count}`);
+    if (leader) lines.push(`- Season leader for ${AWARDS[key].name}: ${leader.teams.join(' and ')} with ${leader.count}`);
   }
   return lines;
 }
