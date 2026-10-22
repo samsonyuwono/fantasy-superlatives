@@ -16,11 +16,11 @@ const awards: WeekAwards = {
   ballerOfTheWeek: { team: 'Alpha', player: 'Puka Nacua', points: 31 },
   sleepwalker: {
     team: 'Delta', teamId: 3, pointsLeft: 40, actual: 80, optimal: 120,
-    matchup: { result: 'tied', score: 80, opponent: 'Echo', opponentScore: 80, flipped: true },
+    matchup: { result: 'tied', score: 80, opponent: 'Echo', opponentScore: 80, mistakeCostTheWin: true },
   },
   bonehead: { team: '', benched: '', benchedPoints: 0, started: '', startedPoints: 0, slot: '', regret: 0 },
-  backedIntoIt: { team: 'Charlie', teamId: 5, score: 70, allPlayWinPct: 0.2, allPlay: { beaten: 2, tied: 0, opponents: 9 } },
-  robbed: { team: 'Alpha', teamId: 1, score: 110, allPlayWinPct: 0.75, allPlay: { beaten: 6, tied: 1, opponents: 9 } },
+  backedIntoIt: { team: 'Charlie', teamId: 5, score: 70, allPlayWinPercentage: 0.2, allPlay: { beaten: 2, tied: 0, otherTeams: 9 } },
+  robbed: { team: 'Alpha', teamId: 1, score: 110, allPlayWinPercentage: 0.75, allPlay: { beaten: 6, tied: 1, otherTeams: 9 } },
 };
 
 const leaderboard: SeasonLeaderboard = {
@@ -33,7 +33,7 @@ const leaderboard: SeasonLeaderboard = {
     backedIntoIt: null,
     robbed: { teams: ['Alpha', 'Bravo'], count: 2 },
   },
-  counts: {
+  winsByTeamId: {
     juggernaut: new Map([[2, 1], [6, 2]]),
     corpse: new Map([[4, 3]]),
     sleepwalker: new Map([[3, 1]]),
@@ -41,7 +41,7 @@ const leaderboard: SeasonLeaderboard = {
     backedIntoIt: new Map([[5, 1]]),
     robbed: new Map([[1, 2], [2, 2]]),
   },
-  nameById: new Map(),
+  latestNameByTeamId: new Map(),
 };
 
 describe('factSheet', () => {
@@ -51,7 +51,7 @@ describe('factSheet', () => {
   });
 
   it('says when the Sleepwalker still won, so the bench did not cost them', () => {
-    const sleepwalker = { ...awards.sleepwalker, matchup: { result: 'won' as const, score: 80, opponent: 'Echo', opponentScore: 75, flipped: false } };
+    const sleepwalker = { ...awards.sleepwalker, matchup: { result: 'won' as const, score: 80, opponent: 'Echo', opponentScore: 75, mistakeCostTheWin: false } };
     expect(factSheet({ ...awards, sleepwalker })).toContain(
       "Delta still won 80.0–75.0 over Echo, so the points left on the bench didn't cost them the game.",
     );
@@ -60,7 +60,7 @@ describe('factSheet', () => {
   it('says when the Bonehead swap would have won a lost game', () => {
     const bonehead = {
       team: 'Alpha', teamId: 1, benched: 'A', benchedPoints: 20, started: 'B', startedPoints: 2, slot: 'WR', regret: 18,
-      matchup: { result: 'lost' as const, score: 110, opponent: 'Bravo', opponentScore: 120, flipped: true },
+      matchup: { result: 'lost' as const, score: 110, opponent: 'Bravo', opponentScore: 120, mistakeCostTheWin: true },
     };
     expect(factSheet({ ...awards, bonehead })).toContain(
       'Alpha lost 110.0–120.0 to Bravo, and with the right start/sit they would have won.',
@@ -70,7 +70,7 @@ describe('factSheet', () => {
   it("calls ESPN's RB/WR/TE slot Flex so the roast does too", () => {
     const bonehead = {
       team: 'Alpha', teamId: 1, benched: 'A', benchedPoints: 20, started: 'B', startedPoints: 2, slot: 'RB/WR/TE', regret: 18,
-      matchup: { result: 'won' as const, score: 120, opponent: 'Bravo', opponentScore: 110, flipped: false },
+      matchup: { result: 'won' as const, score: 120, opponent: 'Bravo', opponentScore: 110, mistakeCostTheWin: false },
     };
     const sheet = factSheet({ ...awards, bonehead });
     expect(sheet).toContain('started B (2.0) at Flex —');
@@ -78,14 +78,14 @@ describe('factSheet', () => {
   });
 
   it('says when a tie would have happened anyway', () => {
-    const sleepwalker = { ...awards.sleepwalker, matchup: { result: 'tied' as const, score: 80, opponent: 'Echo', opponentScore: 80, flipped: false } };
+    const sleepwalker = { ...awards.sleepwalker, matchup: { result: 'tied' as const, score: 80, opponent: 'Echo', opponentScore: 80, mistakeCostTheWin: false } };
     expect(factSheet({ ...awards, sleepwalker })).toContain(
       "Delta tied Echo at 80.0, so the points left on the bench didn't cost them the win.",
     );
   });
 
   it('says when a loss would have happened anyway', () => {
-    const sleepwalker = { ...awards.sleepwalker, matchup: { result: 'lost' as const, score: 80, opponent: 'Echo', opponentScore: 150, flipped: false } };
+    const sleepwalker = { ...awards.sleepwalker, matchup: { result: 'lost' as const, score: 80, opponent: 'Echo', opponentScore: 150, mistakeCostTheWin: false } };
     expect(factSheet({ ...awards, sleepwalker })).toContain('Delta lost 80.0–150.0 to Echo, and would have lost even with their best lineup.');
   });
 
@@ -97,7 +97,7 @@ describe('factSheet', () => {
   });
 
   it('says nobody gets the luck awards when every matchup was a tie', () => {
-    const empty = { team: '', score: 0, allPlayWinPct: 0, allPlay: { beaten: 0, tied: 0, opponents: 0 } };
+    const empty = { team: '', score: 0, allPlayWinPercentage: 0, allPlay: { beaten: 0, tied: 0, otherTeams: 0 } };
     const sheet = factSheet({ ...awards, backedIntoIt: empty, robbed: empty });
     expect(sheet).toContain('- Backed Into It (luckiest win): nobody, since every matchup this week was a tie');
     expect(sheet).toContain('- Robbed (unluckiest loss): nobody, since every matchup this week was a tie');
@@ -131,20 +131,20 @@ const APPROVED: Verdict = { approved: true, issues: [] };
 const sheet = factSheet(awards);
 
 function fakeAgents(drafts: string[], verdicts: Verdict[] = [APPROVED]): Mocked<Agents> {
-  let d = 0;
-  let v = 0;
+  let writerCalls = 0;
+  let checkerCalls = 0;
   return {
     analyst: vi.fn<Agents['analyst']>(async () => ['Bravo ran up the score']),
-    writer: vi.fn<Agents['writer']>(async () => drafts[Math.min(d++, drafts.length - 1)]!),
-    checker: vi.fn<Agents['checker']>(async () => verdicts[Math.min(v++, verdicts.length - 1)]!),
+    writer: vi.fn<Agents['writer']>(async () => drafts[Math.min(writerCalls++, drafts.length - 1)]!),
+    checker: vi.fn<Agents['checker']>(async () => verdicts[Math.min(checkerCalls++, verdicts.length - 1)]!),
   };
 }
 
-function fakeDeps(agents: Agents): Mocked<RoastDependencies> {
+function fakeDependencies(agents: Agents): Mocked<RoastDependencies> {
   return { agents, legacy: vi.fn<RoastDependencies['legacy']>(async () => 'legacy roast'), log: vi.fn<RoastDependencies['log']>() } as Mocked<RoastDependencies>;
 }
 
-const opts = (pipeline?: 'off' | 'shadow' | 'on') => ({ apiKey: 'k', model: 'm', pipeline });
+const options = (pipeline?: 'off' | 'shadow' | 'on') => ({ apiKey: 'k', model: 'm', pipeline });
 
 describe('runPipeline', () => {
   it('approves the first draft when both checks pass', async () => {
@@ -217,63 +217,63 @@ describe('runPipeline', () => {
 describe('generateRoast', () => {
   it('off: makes only the single call', async () => {
     const agents = fakeAgents([GOOD_DRAFT]);
-    const deps = fakeDeps(agents);
-    expect(await generateRoast(awards, opts('off'), undefined, deps)).toBe('legacy roast');
+    const dependencies = fakeDependencies(agents);
+    expect(await generateRoast(awards, options('off'), undefined, dependencies)).toBe('legacy roast');
     expect(agents.analyst).not.toHaveBeenCalled();
     expect(agents.writer).not.toHaveBeenCalled();
   });
 
   it('shadow: sends the single-call roast and logs the approved pipeline roast', async () => {
-    const deps = fakeDeps(fakeAgents([GOOD_DRAFT]));
-    expect(await generateRoast(awards, opts('shadow'), undefined, deps)).toBe('legacy roast');
+    const dependencies = fakeDependencies(fakeAgents([GOOD_DRAFT]));
+    expect(await generateRoast(awards, options('shadow'), undefined, dependencies)).toBe('legacy roast');
     await vi.waitFor(() => {
-      expect(deps.log).toHaveBeenCalledWith(expect.stringContaining('[shadow] roast: analyst ok'));
-      expect(deps.log).toHaveBeenCalledWith(`[shadow] Pipeline roast (not sent):\n${GOOD_DRAFT}`);
+      expect(dependencies.log).toHaveBeenCalledWith(expect.stringContaining('[shadow] roast: analyst ok'));
+      expect(dependencies.log).toHaveBeenCalledWith(`[shadow] Pipeline roast (not sent):\n${GOOD_DRAFT}`);
     });
   });
 
   it('labels the logs with the league', async () => {
-    const deps = fakeDeps(fakeAgents([GOOD_DRAFT]));
-    await generateRoast(awards, { ...opts('shadow'), league: 'Main League' }, undefined, deps);
-    await vi.waitFor(() => expect(deps.log).toHaveBeenCalledWith(expect.stringMatching(/^\[Main League\] \[shadow\] roast: /)));
+    const dependencies = fakeDependencies(fakeAgents([GOOD_DRAFT]));
+    await generateRoast(awards, { ...options('shadow'), league: 'Main League' }, undefined, dependencies);
+    await vi.waitFor(() => expect(dependencies.log).toHaveBeenCalledWith(expect.stringMatching(/^\[Main League\] \[shadow\] roast: /)));
   });
 
   it('shadow: sends without waiting for the pipeline to finish', async () => {
     const agents = fakeAgents([GOOD_DRAFT]);
     agents.analyst.mockReturnValue(new Promise<string[]>(() => {}));
-    const deps = fakeDeps(agents);
-    expect(await generateRoast(awards, opts('shadow'), undefined, deps)).toBe('legacy roast');
-    expect(deps.log).not.toHaveBeenCalled();
+    const dependencies = fakeDependencies(agents);
+    expect(await generateRoast(awards, options('shadow'), undefined, dependencies)).toBe('legacy roast');
+    expect(dependencies.log).not.toHaveBeenCalled();
   });
 
   it('shadow: still sends when the pipeline fails', async () => {
     const agents = fakeAgents([GOOD_DRAFT]);
     agents.writer.mockRejectedValue(new Error('down'));
-    const deps = fakeDeps(agents);
-    expect(await generateRoast(awards, opts('shadow'), undefined, deps)).toBe('legacy roast');
+    const dependencies = fakeDependencies(agents);
+    expect(await generateRoast(awards, options('shadow'), undefined, dependencies)).toBe('legacy roast');
   });
 
   it('shadow: throws when the roast it would send fails', async () => {
-    const deps = fakeDeps(fakeAgents([GOOD_DRAFT]));
-    deps.legacy.mockRejectedValue(new Error('api down'));
-    await expect(generateRoast(awards, opts('shadow'), undefined, deps)).rejects.toThrow('api down');
+    const dependencies = fakeDependencies(fakeAgents([GOOD_DRAFT]));
+    dependencies.legacy.mockRejectedValue(new Error('api down'));
+    await expect(generateRoast(awards, options('shadow'), undefined, dependencies)).rejects.toThrow('api down');
   });
 
   it('defaults to shadow', async () => {
-    const deps = fakeDeps(fakeAgents([GOOD_DRAFT]));
-    expect(await generateRoast(awards, opts(), undefined, deps)).toBe('legacy roast');
+    const dependencies = fakeDependencies(fakeAgents([GOOD_DRAFT]));
+    expect(await generateRoast(awards, options(), undefined, dependencies)).toBe('legacy roast');
   });
 
   it('on: sends the pipeline roast', async () => {
-    const deps = fakeDeps(fakeAgents([GOOD_DRAFT]));
-    expect(await generateRoast(awards, opts('on'), undefined, deps)).toBe(GOOD_DRAFT);
-    expect(deps.legacy).not.toHaveBeenCalled();
+    const dependencies = fakeDependencies(fakeAgents([GOOD_DRAFT]));
+    expect(await generateRoast(awards, options('on'), undefined, dependencies)).toBe(GOOD_DRAFT);
+    expect(dependencies.legacy).not.toHaveBeenCalled();
   });
 
   it('on: falls back to the single-call roast when every draft is rejected', async () => {
-    const deps = fakeDeps(fakeAgents([BAD_DRAFT]));
-    expect(await generateRoast(awards, opts('on'), undefined, deps)).toBe('legacy roast');
-    expect(deps.log).toHaveBeenCalledWith('roast: falling back to the single-call roast');
+    const dependencies = fakeDependencies(fakeAgents([BAD_DRAFT]));
+    expect(await generateRoast(awards, options('on'), undefined, dependencies)).toBe('legacy roast');
+    expect(dependencies.log).toHaveBeenCalledWith('roast: falling back to the single-call roast');
   });
 });
 

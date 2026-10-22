@@ -20,7 +20,7 @@ export interface RoastOptions {
 }
 
 function allPlayText(record: AllPlayRecord): string {
-  const base = `${record.beaten} of the other ${record.opponents} teams`;
+  const base = `${record.beaten} of the other ${record.otherTeams} teams`;
   return record.tied > 0 ? `${base} and tied ${record.tied}` : base;
 }
 
@@ -39,11 +39,11 @@ function outcomeText(team: string, outcome: MatchupOutcome | undefined, { what, 
   const finalScore = `${formatPoints(outcome.score)}–${formatPoints(outcome.opponentScore)}`;
   if (outcome.result === 'won') return ` ${team} still won ${finalScore} over ${outcome.opponent}, so ${what} didn't cost them the game.`;
   if (outcome.result === 'tied') {
-    return outcome.flipped
+    return outcome.mistakeCostTheWin
       ? ` ${team} tied ${outcome.opponent} at ${formatPoints(outcome.score)}, and with ${fix} they would have won.`
       : ` ${team} tied ${outcome.opponent} at ${formatPoints(outcome.score)}, so ${what} didn't cost them the win.`;
   }
-  return outcome.flipped
+  return outcome.mistakeCostTheWin
     ? ` ${team} lost ${finalScore} to ${outcome.opponent}, and with ${fix} they would have won.`
     : ` ${team} lost ${finalScore} to ${outcome.opponent}, and would have lost even with ${fix}.`;
 }
@@ -89,7 +89,7 @@ function seasonFacts(awards: WeekAwards, leaderboard: SeasonLeaderboard): string
   for (const key of SEASON_AWARD_KEYS) {
     const teamId = awards[key].teamId;
     if (teamId === undefined) continue;
-    const wins = leaderboard.counts[key].get(teamId) ?? 0;
+    const wins = leaderboard.winsByTeamId[key].get(teamId) ?? 0;
     const isRepeatWinner = wins >= 2;
     const isShownOnLeaderboard = wins >= MIN_WINS_TO_LEAD[key];
     if (isRepeatWinner && isShownOnLeaderboard) lines.push(`- ${awards[key].team} has now won ${AWARDS[key].name} ${wins} times this season (including this week).`);
@@ -185,10 +185,10 @@ export interface RoastDependencies {
   log(message: string): void;
 }
 
-const CLAUDE_REQUEST_TIMEOUT_MS = 90_000;
+const CLAUDE_REQUEST_TIMEOUT_MILLISECONDS = 90_000;
 
 function claudeDependencies(options: RoastOptions): RoastDependencies {
-  const client = new Anthropic({ apiKey: options.apiKey, timeout: CLAUDE_REQUEST_TIMEOUT_MS });
+  const client = new Anthropic({ apiKey: options.apiKey, timeout: CLAUDE_REQUEST_TIMEOUT_MILLISECONDS });
   return {
     agents: claudeAgents(client, options.model),
     legacy: (sheet) => callClaude(client, options.model, { system: ROAST_PROMPT, user: sheet }),

@@ -6,21 +6,21 @@ const AWARD_NAMES = Object.values(AWARDS)
 const withoutLeadingThe = (name: string) => name.replace(/^The /, '');
 const caseSensitiveWholeWord = (text: string) => new RegExp(`\\b${text}\\b`);
 const AWARD_PATTERNS = AWARD_NAMES.map((name) => ({ name, pattern: caseSensitiveWholeWord(withoutLeadingThe(name)) }));
-const NUMBER = /\d+(?:\.\d+)?/g;
+const NUMBER_PATTERN = /\d+(?:\.\d+)?/g;
 /**
  * Numbers up to this skip the check: small counts ("2 teams", "Week 5", "3rd") read naturally
  * and can't hide a wrong score.
  */
 export const MAX_FREE_NUMBER = 10;
 
-function matchesSheetValue(raw: string, sheetValue: number): boolean {
-  const value = Number(raw);
-  if (raw.includes('.')) return Math.abs(sheetValue - value) < 0.05;
+function matchesSheetValue(draftNumber: string, sheetValue: number): boolean {
+  const value = Number(draftNumber);
+  if (draftNumber.includes('.')) return Math.abs(sheetValue - value) < 0.05;
   return Math.round(sheetValue) === value || Math.trunc(sheetValue) === value;
 }
 
 function numbersIn(text: string): number[] {
-  return (text.match(NUMBER) ?? []).map(Number);
+  return (text.match(NUMBER_PATTERN) ?? []).map(Number);
 }
 
 /**
@@ -33,13 +33,13 @@ function numbersIn(text: string): number[] {
 export function verifyDraft(draft: string, sheet: string): string[] {
   const issues: string[] = [];
 
-  const allowed = numbersIn(sheet);
-  const unknown = new Set<string>();
-  for (const raw of draft.match(NUMBER) ?? []) {
-    if (Number(raw) <= MAX_FREE_NUMBER) continue;
-    if (!allowed.some((sheetValue) => matchesSheetValue(raw, sheetValue))) unknown.add(raw);
+  const sheetNumbers = numbersIn(sheet);
+  const unknownNumbers = new Set<string>();
+  for (const draftNumber of draft.match(NUMBER_PATTERN) ?? []) {
+    if (Number(draftNumber) <= MAX_FREE_NUMBER) continue;
+    if (!sheetNumbers.some((sheetValue) => matchesSheetValue(draftNumber, sheetValue))) unknownNumbers.add(draftNumber);
   }
-  for (const raw of unknown) issues.push(`The number ${raw} isn't in the fact sheet. Use a number from the sheet or cut it.`);
+  for (const draftNumber of unknownNumbers) issues.push(`The number ${draftNumber} isn't in the fact sheet. Use a number from the sheet or cut it.`);
 
   for (const { name, pattern } of AWARD_PATTERNS) {
     if (!pattern.test(draft)) issues.push(`The award "${name}" is missing. Name it as written, in title case.`);

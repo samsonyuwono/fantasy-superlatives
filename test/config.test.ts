@@ -21,8 +21,8 @@ describe('parseLeaguesJson', () => {
   });
 
   it('throws naming the league id when a required field is missing', () => {
-    const bad = { ...VALID_LEAGUE, displayName: undefined };
-    expect(() => parseLeaguesJson(JSON.stringify({ leagues: [bad] }))).toThrowError(/League "main"/);
+    const missingDisplayName = { ...VALID_LEAGUE, displayName: undefined };
+    expect(() => parseLeaguesJson(JSON.stringify({ leagues: [missingDisplayName] }))).toThrowError(/League "main"/);
   });
 
   it('throws on duplicate ids', () => {
@@ -57,8 +57,8 @@ describe('parseLeagueSecretsJson', () => {
 
 describe('resolveEspnConfig', () => {
   it('merges a present secret entry into the EspnConfig', () => {
-    const cfg = resolveEspnConfig(VALID_LEAGUE, { main: { espnS2: 'a', swid: 'b' } });
-    expect(cfg).toEqual({ leagueId: 123456, seasonYear: 2026, espnS2: 'a', swid: 'b' });
+    const espnConfig = resolveEspnConfig(VALID_LEAGUE, { main: { espnS2: 'a', swid: 'b' } });
+    expect(espnConfig).toEqual({ leagueId: 123456, seasonYear: 2026, espnS2: 'a', swid: 'b' });
   });
 
   it('throws naming the league when auth is required but no secret entry exists', () => {
@@ -67,8 +67,8 @@ describe('resolveEspnConfig', () => {
 
   it('succeeds with no cookies when requiresAuth is false and no secret entry exists', () => {
     const publicLeague = { ...VALID_LEAGUE, requiresAuth: false };
-    const cfg = resolveEspnConfig(publicLeague, {});
-    expect(cfg).toEqual({ leagueId: 123456, seasonYear: 2026 });
+    const espnConfig = resolveEspnConfig(publicLeague, {});
+    expect(espnConfig).toEqual({ leagueId: 123456, seasonYear: 2026 });
   });
 });
 

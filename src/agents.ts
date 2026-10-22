@@ -67,7 +67,7 @@ interface Call {
   user: string;
 }
 
-const BASE_PARAMS = {
+const BASE_PARAMETERS = {
   max_tokens: 4096,
 } as const;
 
@@ -83,7 +83,7 @@ function assertFinished(message: Anthropic.Message): void {
  */
 export async function callClaude(client: Anthropic, model: string, { system, user }: Call): Promise<string> {
   const message = await client.messages.create({
-    ...BASE_PARAMS,
+    ...BASE_PARAMETERS,
     model,
     output_config: { effort: 'low' },
     system,
@@ -130,7 +130,7 @@ export function claudeAgents(client: Anthropic, model: string): Agents {
   return {
     async analyst(sheet) {
       const message = await client.messages.parse({
-        ...BASE_PARAMS,
+        ...BASE_PARAMETERS,
         model,
         output_config: { effort: 'low', format: STORYLINES_FORMAT },
         system: ANALYST_PROMPT,
@@ -147,7 +147,7 @@ export function claudeAgents(client: Anthropic, model: string): Agents {
 
     async checker(sheet, draft) {
       const message = await client.messages.parse({
-        ...BASE_PARAMS,
+        ...BASE_PARAMETERS,
         model,
         output_config: { effort: 'low', format: VERDICT_FORMAT },
         system: CHECKER_PROMPT,

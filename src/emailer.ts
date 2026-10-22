@@ -12,13 +12,13 @@ export interface SendOptions {
  * Send the recap email through the Resend API, so no personal mailbox or SMTP sender is needed.
  * Throws if Resend reports an error.
  */
-export async function sendRecap(opts: SendOptions): Promise<void> {
-  const resend = new Resend(opts.apiKey);
+export async function sendRecap(options: SendOptions): Promise<void> {
+  const resend = new Resend(options.apiKey);
   const { error } = await resend.emails.send({
-    from: opts.from,
-    to: opts.to,
-    subject: opts.subject,
-    text: opts.text,
+    from: options.from,
+    to: options.to,
+    subject: options.subject,
+    text: options.text,
   });
   if (error) {
     throw new Error(`Resend failed to send: ${error.name} — ${error.message}`);
@@ -60,7 +60,7 @@ export function failureAlertContent(
 }
 
 /** Notify the owner (not the friend group) that one league's recap failed to send. */
-export async function sendFailureAlert(opts: {
+export async function sendFailureAlert(options: {
   apiKey: string;
   from: string;
   ownerEmail: string;
@@ -69,9 +69,9 @@ export async function sendFailureAlert(opts: {
   runUrl?: string;
   fixes?: SecretFixes;
 }): Promise<void> {
-  const resend = new Resend(opts.apiKey);
-  const { subject, text } = failureAlertContent(opts.league, opts.error, opts.runUrl, opts.fixes);
-  const { error } = await resend.emails.send({ from: opts.from, to: opts.ownerEmail, subject, text });
+  const resend = new Resend(options.apiKey);
+  const { subject, text } = failureAlertContent(options.league, options.error, options.runUrl, options.fixes);
+  const { error } = await resend.emails.send({ from: options.from, to: options.ownerEmail, subject, text });
   if (error) {
     throw new Error(`Resend failed to send failure alert: ${error.name} — ${error.message}`);
   }
@@ -97,7 +97,7 @@ interface FixStep {
   note?: string;
 }
 
-const KIND_LABEL: Record<FailureKind, string> = {
+const FAILURE_KIND_LABEL: Record<FailureKind, string> = {
   cookies: 'Cookies rejected',
   unclear: 'Unexpected response from ESPN (may be the cookies)',
   'missing-secret': 'No entry in LEAGUE_SECRETS_JSON',
@@ -106,10 +106,10 @@ const KIND_LABEL: Record<FailureKind, string> = {
 
 function secretFixItems(fixes: SecretFixes): string[] {
   return [
-    ...fixes.accounts.map((ids) =>
-      ids.length > 1
-        ? `Update espnS2 and swid for ${ids.join(', ')}. They use the same ESPN account, so they all need the new cookies.`
-        : `Update espnS2 and swid for ${ids[0]}.`,
+    ...fixes.accounts.map((leagueIds) =>
+      leagueIds.length > 1
+        ? `Update espnS2 and swid for ${leagueIds.join(', ')}. They use the same ESPN account, so they all need the new cookies.`
+        : `Update espnS2 and swid for ${leagueIds[0]}.`,
     ),
     ...fixes.missing.map((id) => `Add an entry for ${id}: "${id}": { "espnS2": "...", "swid": "{...}" }`),
   ];
@@ -157,8 +157,8 @@ const OTHER_FAILURE_STEPS: FixStep[] = [
   { text: 'Then re-run the check:', command: 'gh workflow run cookie-check.yml -f force=true' },
 ];
 
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 const CODE_STYLE = 'display:inline-block;margin-top:4px;padding:4px 8px;background:#f3f4f6;border-radius:4px;font-family:Menlo,Consolas,monospace;font-size:13px';
@@ -166,30 +166,30 @@ const NOTE_STYLE = 'color:#6b7280;font-size:13px';
 const HEADING_STYLE = 'margin:24px 0 8px;font-size:15px';
 
 function stepsText(steps: FixStep[], numbered: boolean): string[] {
-  return steps.flatMap((s, i) => [
-    numbered ? `${i + 1}. ${s.text}` : s.text,
-    ...(s.command ? [`     ${s.command}`] : []),
-    ...(s.items ?? []).map((item) => `   - ${item}`),
-    ...(s.note ? [`   ${s.note}`] : []),
+  return steps.flatMap((step, i) => [
+    numbered ? `${i + 1}. ${step.text}` : step.text,
+    ...(step.command ? [`     ${step.command}`] : []),
+    ...(step.items ?? []).map((item) => `   - ${item}`),
+    ...(step.note ? [`   ${step.note}`] : []),
   ]);
 }
 
 function stepsHtml(steps: FixStep[], numbered: boolean): string[] {
-  const tag = numbered ? 'ol' : 'ul';
+  const listTag = numbered ? 'ol' : 'ul';
   const listStyle = numbered ? 'padding-left:20px;margin:0' : 'padding-left:0;margin:0;list-style:none';
   return [
-    `<${tag} style="${listStyle}">`,
+    `<${listTag} style="${listStyle}">`,
     ...steps.map(
-      (s) =>
-        `<li style="margin-bottom:10px">${escapeHtml(s.text)}` +
-        (s.command ? `<br><code style="${CODE_STYLE}">${escapeHtml(s.command)}</code>` : '') +
-        (s.items?.length
-          ? `<ul style="padding-left:20px;margin:4px 0 0">${s.items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`
+      (step) =>
+        `<li style="margin-bottom:10px">${escapeHtml(step.text)}` +
+        (step.command ? `<br><code style="${CODE_STYLE}">${escapeHtml(step.command)}</code>` : '') +
+        (step.items?.length
+          ? `<ul style="padding-left:20px;margin:4px 0 0">${step.items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`
           : '') +
-        (s.note ? `<br><span style="${NOTE_STYLE}">${escapeHtml(s.note)}</span>` : '') +
+        (step.note ? `<br><span style="${NOTE_STYLE}">${escapeHtml(step.note)}</span>` : '') +
         '</li>',
     ),
-    `</${tag}>`,
+    `</${listTag}>`,
   ];
 }
 
@@ -202,20 +202,22 @@ export function espnCheckAlertContent(
   fixes: SecretFixes,
   runUrl?: string,
 ): { subject: string; text: string; html: string } {
-  const names = failures.map((f) => f.league.displayName).join(', ');
-  const allCookies = failures.every((f) => f.kind === 'cookies');
-  const subject = allCookies ? `⚠️ ESPN cookies may have expired (${names})` : `⚠️ ESPN check failed (${names})`;
-  const count = failures.length === 1 ? '1 league' : `${failures.length} leagues`;
-  const intro = `The ESPN check failed for ${count}. The next recap for ${failures.length === 1 ? 'it' : 'them'} will fail unless this is fixed.`;
+  const leagueNames = failures.map((failure) => failure.league.displayName).join(', ');
+  const everyFailureIsCookies = failures.every((failure) => failure.kind === 'cookies');
+  const subject = everyFailureIsCookies
+    ? `⚠️ ESPN cookies may have expired (${leagueNames})`
+    : `⚠️ ESPN check failed (${leagueNames})`;
+  const leagueCount = failures.length === 1 ? '1 league' : `${failures.length} leagues`;
+  const intro = `The ESPN check failed for ${leagueCount}. The next recap for ${failures.length === 1 ? 'it' : 'them'} will fail unless this is fixed.`;
 
   const sections: { heading: string; steps: FixStep[]; numbered: boolean }[] = [];
   if (fixes.accounts.length > 0 || fixes.missing.length > 0) {
     sections.push({ heading: 'How to fix the cookies', steps: cookieFixSteps(fixes), numbered: true });
   }
-  if (failures.some((f) => f.kind === 'unclear')) {
+  if (failures.some((failure) => failure.kind === 'unclear')) {
     sections.push({ heading: 'Unexpected response from ESPN', steps: UNCLEAR_FAILURE_STEPS, numbered: false });
   }
-  if (failures.some((f) => f.kind === 'other')) {
+  if (failures.some((failure) => failure.kind === 'other')) {
     sections.push({ heading: 'Not a cookie problem', steps: OTHER_FAILURE_STEPS, numbered: false });
   }
 
@@ -223,11 +225,11 @@ export function espnCheckAlertContent(
     intro,
     '',
     'WHICH LEAGUES FAILED',
-    ...failures.flatMap((f) => [
-      `• ${f.league.displayName} (id: ${f.league.id}): ${KIND_LABEL[f.kind]}`,
-      `  ${f.error.message}`,
+    ...failures.flatMap((failure) => [
+      `• ${failure.league.displayName} (id: ${failure.league.id}): ${FAILURE_KIND_LABEL[failure.kind]}`,
+      `  ${failure.error.message}`,
     ]),
-    ...sections.flatMap((s) => ['', s.heading.toUpperCase(), ...stepsText(s.steps, s.numbered)]),
+    ...sections.flatMap((section) => ['', section.heading.toUpperCase(), ...stepsText(section.steps, section.numbered)]),
     ...(runUrl ? ['', `View the run: ${runUrl}`] : []),
   ].join('\n');
 
@@ -237,11 +239,14 @@ export function espnCheckAlertContent(
     `<h3 style="${HEADING_STYLE}">Which leagues failed</h3>`,
     '<ul style="padding-left:20px;margin:0">',
     ...failures.map(
-      (f) =>
-        `<li style="margin-bottom:8px"><strong>${escapeHtml(f.league.displayName)}</strong> <span style="${NOTE_STYLE}">(id: ${escapeHtml(f.league.id)})</span>: ${escapeHtml(KIND_LABEL[f.kind])}<br><span style="${NOTE_STYLE}">${escapeHtml(f.error.message)}</span></li>`,
+      (failure) =>
+        `<li style="margin-bottom:8px"><strong>${escapeHtml(failure.league.displayName)}</strong> <span style="${NOTE_STYLE}">(id: ${escapeHtml(failure.league.id)})</span>: ${escapeHtml(FAILURE_KIND_LABEL[failure.kind])}<br><span style="${NOTE_STYLE}">${escapeHtml(failure.error.message)}</span></li>`,
     ),
     '</ul>',
-    ...sections.flatMap((s) => [`<h3 style="${HEADING_STYLE}">${escapeHtml(s.heading)}</h3>`, ...stepsHtml(s.steps, s.numbered)]),
+    ...sections.flatMap((section) => [
+      `<h3 style="${HEADING_STYLE}">${escapeHtml(section.heading)}</h3>`,
+      ...stepsHtml(section.steps, section.numbered),
+    ]),
     ...(runUrl ? [`<p style="margin-top:24px"><a href="${escapeHtml(runUrl)}">View the run on GitHub</a></p>`] : []),
     '</div>',
   ].join('\n');
@@ -250,7 +255,7 @@ export function espnCheckAlertContent(
 }
 
 /** Warn the owner, ahead of Tuesday's run, that one or more leagues failed the ESPN check. Throws if Resend reports an error. */
-export async function sendEspnCheckAlert(opts: {
+export async function sendEspnCheckAlert(options: {
   apiKey: string;
   from: string;
   ownerEmail: string;
@@ -258,16 +263,16 @@ export async function sendEspnCheckAlert(opts: {
   fixes: SecretFixes;
   runUrl?: string;
 }): Promise<void> {
-  const resend = new Resend(opts.apiKey);
-  const { subject, text, html } = espnCheckAlertContent(opts.failures, opts.fixes, opts.runUrl);
-  const { error } = await resend.emails.send({ from: opts.from, to: opts.ownerEmail, subject, text, html });
+  const resend = new Resend(options.apiKey);
+  const { subject, text, html } = espnCheckAlertContent(options.failures, options.fixes, options.runUrl);
+  const { error } = await resend.emails.send({ from: options.from, to: options.ownerEmail, subject, text, html });
   if (error) {
     throw new Error(`Resend failed to send ESPN check alert: ${error.name} — ${error.message}`);
   }
 }
 
 /** Tell the owner a league's recap went out without its season leaderboard. Throws if Resend reports an error. */
-export async function sendLeaderboardSkippedAlert(opts: {
+export async function sendLeaderboardSkippedAlert(options: {
   apiKey: string;
   from: string;
   ownerEmail: string;
@@ -275,18 +280,18 @@ export async function sendLeaderboardSkippedAlert(opts: {
   error: Error;
   runUrl?: string;
 }): Promise<void> {
-  const resend = new Resend(opts.apiKey);
+  const resend = new Resend(options.apiKey);
   const lines = [
-    `The fantasy recap for ${opts.league.displayName} (id "${opts.league.id}") was sent, but without the season leaderboard.`,
+    `The fantasy recap for ${options.league.displayName} (id "${options.league.id}") was sent, but without the season leaderboard.`,
     '',
-    `Error: ${opts.error.message}`,
+    `Error: ${options.error.message}`,
   ];
-  if (opts.runUrl) lines.push('', `Run: ${opts.runUrl}`);
+  if (options.runUrl) lines.push('', `Run: ${options.runUrl}`);
 
   const { error } = await resend.emails.send({
-    from: opts.from,
-    to: opts.ownerEmail,
-    subject: `⚠️ Fantasy recap sent without leaderboard (${opts.league.displayName})`,
+    from: options.from,
+    to: options.ownerEmail,
+    subject: `⚠️ Fantasy recap sent without leaderboard (${options.league.displayName})`,
     text: lines.join('\n'),
   });
   if (error) {

@@ -21,7 +21,7 @@ export interface NormalizedMatchup {
 export interface AllPlayRecord {
   beaten: number;
   tied: number;
-  opponents: number;
+  otherTeams: number;
 }
 
 export interface MatchupResult {
@@ -36,7 +36,7 @@ export interface MatchupOutcome {
   score: number;
   opponent: string;
   opponentScore: number;
-  flipped: boolean;
+  mistakeCostTheWin: boolean;
 }
 
 export interface WeekAwards {
@@ -57,8 +57,8 @@ export interface WeekAwards {
     regret: number;
     matchup?: MatchupOutcome;
   };
-  backedIntoIt: { team: string; teamId?: number; score: number; allPlayWinPct: number; allPlay: AllPlayRecord };
-  robbed: { team: string; teamId?: number; score: number; allPlayWinPct: number; allPlay: AllPlayRecord };
+  backedIntoIt: { team: string; teamId?: number; score: number; allPlayWinPercentage: number; allPlay: AllPlayRecord };
+  robbed: { team: string; teamId?: number; score: number; allPlayWinPercentage: number; allPlay: AllPlayRecord };
 }
 
 export type AwardKey = Exclude<keyof WeekAwards, 'week' | 'results'>;
@@ -92,12 +92,12 @@ export function slotLabel(slot: string): string {
   return slot === 'RB/WR/TE' ? 'Flex' : slot;
 }
 
-const isStarter = (pl: NormalizedPlayer): boolean => pl.slot !== BENCH && pl.slot !== IR;
+const isStarter = (player: NormalizedPlayer): boolean => player.slot !== BENCH && player.slot !== IR;
 const startersOf = (team: NormalizedTeam): NormalizedPlayer[] => team.players.filter(isStarter);
-const benchOf = (team: NormalizedTeam): NormalizedPlayer[] => team.players.filter((pl) => pl.slot === BENCH);
+const benchOf = (team: NormalizedTeam): NormalizedPlayer[] => team.players.filter((player) => player.slot === BENCH);
 
 const allTeams = (matchups: NormalizedMatchup[]): NormalizedTeam[] =>
-  matchups.flatMap((m) => [m.home, m.away]);
+  matchups.flatMap((matchup) => [matchup.home, matchup.away]);
 
 /**
  * Maximum total points achievable from a team's roster, filling the league's lineup slots
@@ -106,29 +106,29 @@ const allTeams = (matchups: NormalizedMatchup[]): NormalizedTeam[] =>
  * fill scores 0. Exact solution via memoized assignment (rosters are small, so this is cheap).
  */
 export function optimalLineupPoints(team: NormalizedTeam): number {
-  const slots = team.lineupSlots ?? startersOf(team).map((s) => s.slot);
-  const startablePlayers = team.players.filter((pl) => pl.slot !== IR);
-  const memo = new Map<string, number>();
+  const slots = team.lineupSlots ?? startersOf(team).map((starter) => starter.slot);
+  const startablePlayers = team.players.filter((player) => player.slot !== IR);
+  const bestTotalByState = new Map<string, number>();
 
   const solve = (slotIndex: number, usedMask: number): number => {
     if (slotIndex === slots.length) return 0;
-    const key = `${slotIndex}:${usedMask}`;
-    const cached = memo.get(key);
+    const stateKey = `${slotIndex}:${usedMask}`;
+    const cached = bestTotalByState.get(stateKey);
     if (cached !== undefined) return cached;
 
     const slot = slots[slotIndex]!;
     let best = -Infinity;
     for (let i = 0; i < startablePlayers.length; i++) {
-      const bit = 1 << i;
-      if (usedMask & bit) continue;
+      const playerBit = 1 << i;
+      if (usedMask & playerBit) continue;
       const candidate = startablePlayers[i]!;
       if (!candidate.eligibleSlots.includes(slot)) continue;
-      const total = candidate.points + solve(slotIndex + 1, usedMask | bit);
+      const total = candidate.points + solve(slotIndex + 1, usedMask | playerBit);
       if (total > best) best = total;
     }
     const slotUnfillable = best === -Infinity;
     if (slotUnfillable) best = solve(slotIndex + 1, usedMask);
-    memo.set(key, best);
+    bestTotalByState.set(stateKey, best);
     return best;
   };
 
@@ -136,21 +136,21 @@ export function optimalLineupPoints(team: NormalizedTeam): number {
 }
 
 function computeJuggernaut(teams: NormalizedTeam[]): WeekAwards['juggernaut'] {
-  const top = teams.reduce((a, b) => (b.score > a.score ? b : a));
-  return { team: top.name, teamId: top.teamId, score: top.score };
+  const highestScoring = teams.reduce((highest, team) => (team.score > highest.score ? team : highest));
+  return { team: highestScoring.name, teamId: highestScoring.teamId, score: highestScoring.score };
 }
 
 function computeCorpse(teams: NormalizedTeam[]): WeekAwards['corpse'] {
-  const bottom = teams.reduce((a, b) => (b.score < a.score ? b : a));
-  return { team: bottom.name, teamId: bottom.teamId, score: bottom.score };
+  const lowestScoring = teams.reduce((lowest, team) => (team.score < lowest.score ? team : lowest));
+  return { team: lowestScoring.name, teamId: lowestScoring.teamId, score: lowestScoring.score };
 }
 
 function computeBaller(teams: NormalizedTeam[]): WeekAwards['ballerOfTheWeek'] {
   let topStarter: WeekAwards['ballerOfTheWeek'] | null = null;
   for (const team of teams) {
-    for (const pl of startersOf(team)) {
-      if (!topStarter || pl.points > topStarter.points) {
-        topStarter = { team: team.name, player: pl.name, points: pl.points };
+    for (const player of startersOf(team)) {
+      if (!topStarter || player.points > topStarter.points) {
+        topStarter = { team: team.name, player: player.name, points: player.points };
       }
     }
   }
@@ -162,7 +162,7 @@ type Sleepwalker = Omit<WeekAwards['sleepwalker'], 'matchup'>;
 function computeSleepwalker(teams: NormalizedTeam[]): Sleepwalker {
   let mostPointsLeft: Sleepwalker | null = null;
   for (const team of teams) {
-    const actual = startersOf(team).reduce((sum, pl) => sum + pl.points, 0);
+    const actual = startersOf(team).reduce((sum, player) => sum + player.points, 0);
     const optimal = optimalLineupPoints(team);
     const pointsLeft = optimal - actual;
     if (!mostPointsLeft || pointsLeft > mostPointsLeft.pointsLeft) {
@@ -211,16 +211,16 @@ function nobodyBlundered(): WeekAwards['bonehead'] {
 }
 
 function allPlayRecord(team: NormalizedTeam, teams: NormalizedTeam[]): AllPlayRecord {
-  const others = teams.filter((t) => t.teamId !== team.teamId);
+  const otherTeams = teams.filter((otherTeam) => otherTeam.teamId !== team.teamId);
   return {
-    beaten: others.filter((o) => team.score > o.score).length,
-    tied: others.filter((o) => team.score === o.score).length,
-    opponents: others.length,
+    beaten: otherTeams.filter((otherTeam) => team.score > otherTeam.score).length,
+    tied: otherTeams.filter((otherTeam) => team.score === otherTeam.score).length,
+    otherTeams: otherTeams.length,
   };
 }
 
-function allPlayWinPct(r: AllPlayRecord): number {
-  return r.opponents === 0 ? 0 : (r.beaten + r.tied / 2) / r.opponents;
+function allPlayWinPercentage(record: AllPlayRecord): number {
+  return record.otherTeams === 0 ? 0 : (record.beaten + record.tied / 2) / record.otherTeams;
 }
 
 function computeLuck(
@@ -229,34 +229,34 @@ function computeLuck(
 ): { backedIntoIt: WeekAwards['backedIntoIt']; robbed: WeekAwards['robbed'] } {
   const winners: NormalizedTeam[] = [];
   const losers: NormalizedTeam[] = [];
-  for (const m of matchups) {
-    if (m.home.score > m.away.score) {
-      winners.push(m.home);
-      losers.push(m.away);
-    } else if (m.away.score > m.home.score) {
-      winners.push(m.away);
-      losers.push(m.home);
+  for (const matchup of matchups) {
+    if (matchup.home.score > matchup.away.score) {
+      winners.push(matchup.home);
+      losers.push(matchup.away);
+    } else if (matchup.away.score > matchup.home.score) {
+      winners.push(matchup.away);
+      losers.push(matchup.home);
     }
   }
 
-  const withAllPlay = (t: NormalizedTeam) => {
-    const allPlay = allPlayRecord(t, teams);
-    return { team: t.name, teamId: t.teamId, score: t.score, allPlayWinPct: allPlayWinPct(allPlay), allPlay };
+  const withAllPlay = (team: NormalizedTeam) => {
+    const allPlay = allPlayRecord(team, teams);
+    return { team: team.name, teamId: team.teamId, score: team.score, allPlayWinPercentage: allPlayWinPercentage(allPlay), allPlay };
   };
 
   const noDecidedMatchupPlaceholder = {
     team: '',
     score: 0,
-    allPlayWinPct: 0,
-    allPlay: { beaten: 0, tied: 0, opponents: 0 },
+    allPlayWinPercentage: 0,
+    allPlay: { beaten: 0, tied: 0, otherTeams: 0 },
   };
 
   const luckiestWinner = winners.length
-    ? winners.map(withAllPlay).reduce((a, b) => (b.allPlayWinPct < a.allPlayWinPct ? b : a))
+    ? winners.map(withAllPlay).reduce((luckiest, candidate) => (candidate.allPlayWinPercentage < luckiest.allPlayWinPercentage ? candidate : luckiest))
     : noDecidedMatchupPlaceholder;
 
   const unluckiestLoser = losers.length
-    ? losers.map(withAllPlay).reduce((a, b) => (b.allPlayWinPct > a.allPlayWinPct ? b : a))
+    ? losers.map(withAllPlay).reduce((unluckiest, candidate) => (candidate.allPlayWinPercentage > unluckiest.allPlayWinPercentage ? candidate : unluckiest))
     : noDecidedMatchupPlaceholder;
 
   return { backedIntoIt: luckiestWinner, robbed: unluckiestLoser };
@@ -264,7 +264,7 @@ function computeLuck(
 
 /**
  * How `teamId`'s matchup went, and whether `fixedScore` (their score without the mistake) would
- * have won it (`flipped`), so the roast can't claim a bench mistake cost a game that was won anyway.
+ * have won it (`mistakeCostTheWin`), so the roast can't claim a bench mistake cost a game that was won anyway.
  */
 export function matchupOutcome(
   matchups: NormalizedMatchup[],
@@ -281,7 +281,7 @@ export function matchupOutcome(
       score: team.score,
       opponent: opponent.name,
       opponentScore: opponent.score,
-      flipped: result !== 'won' && fixedScore(team.score) > opponent.score,
+      mistakeCostTheWin: result !== 'won' && fixedScore(team.score) > opponent.score,
     };
   }
   throw new Error(`Team ${teamId} isn't in any matchup this week.`);

@@ -20,9 +20,9 @@ import {
 } from './config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = join(__dirname, '..');
+const REPOSITORY_ROOT = join(__dirname, '..');
 
-interface Args {
+interface CommandLineOptions {
   week?: number;
   dryRun: boolean;
 }
@@ -43,18 +43,18 @@ export interface RecapResult {
   leaderboardError?: Error;
 }
 
-function parseArgs(argv: string[]): Args {
-  const args: Args = { dryRun: false };
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    if (arg === '--dry-run') args.dryRun = true;
-    else if (arg === '--week') {
-      const value = Number(argv[++i]);
-      if (!Number.isInteger(value)) throw new Error('--week requires an integer, e.g. --week 5');
-      args.week = value;
+function parseCommandLineOptions(commandLineArguments: string[]): CommandLineOptions {
+  const options: CommandLineOptions = { dryRun: false };
+  for (let i = 0; i < commandLineArguments.length; i++) {
+    const argument = commandLineArguments[i];
+    if (argument === '--dry-run') options.dryRun = true;
+    else if (argument === '--week') {
+      const week = Number(commandLineArguments[++i]);
+      if (!Number.isInteger(week)) throw new Error('--week requires an integer, e.g. --week 5');
+      options.week = week;
     }
   }
-  return args;
+  return options;
 }
 
 function loadSharedConfig(): SharedConfig {
@@ -71,12 +71,12 @@ function loadSharedConfig(): SharedConfig {
 async function runLeagueRecap(
   league: LeagueConfig,
   secrets: Record<string, LeagueSecrets>,
-  shared: SharedConfig,
-  args: Args,
+  sharedConfig: SharedConfig,
+  options: CommandLineOptions,
 ): Promise<RecapResult> {
   try {
-    const isWeekForced = args.week !== undefined;
-    const week = args.week ?? completedWeek(league.seasonWeek1Tuesday, new Date());
+    const isWeekForced = options.week !== undefined;
+    const week = options.week ?? completedWeek(league.seasonWeek1Tuesday, new Date());
 
     if (!isWeekForced && !isInSeason(week)) {
       console.info(`[${league.displayName}] Week ${week} is outside the regular season (Weeks 1–14). Nothing to send.`);
@@ -84,15 +84,15 @@ async function runLeagueRecap(
     }
 
     console.info(`[${league.displayName}] Building the Week ${week} recap...`);
-    const espn = leagueFetcher(resolveEspnConfig(league, secrets));
-    const { matchups } = await espn.week(week);
+    const espnFetcher = leagueFetcher(resolveEspnConfig(league, secrets));
+    const { matchups } = await espnFetcher.week(week);
     if (matchups.length === 0) {
       throw new Error(`No matchups returned for Week ${week} — check the league ID, season, and cookies.`);
     }
     console.info(`[${league.displayName}] Fetched ${matchups.length} matchups for Week ${week} of ${league.seasonYear}.`);
 
-    const teams = matchups.flatMap((m) => [m.home, m.away]);
-    if (teams.every((t) => t.score === 0)) {
+    const teams = matchups.flatMap((matchup) => [matchup.home, matchup.away]);
+    if (teams.every((team) => team.score === 0)) {
       throw new Error(
         `Week ${week} of season ${league.seasonYear} has no scores yet (every team is 0.0). ` +
           `This usually means that season/week hasn't been played. To test now, point this league ` +
@@ -107,10 +107,10 @@ async function runLeagueRecap(
     if (week > 1 && isInSeason(week)) {
       try {
         const earlierWeekNumbers = Array.from({ length: week - 1 }, (_, i) => i + 1);
-        const earlierWeeks = await espn.earlierWeeks(earlierWeekNumbers);
+        const earlierWeeks = await espnFetcher.earlierWeeks(earlierWeekNumbers);
         leaderboard = buildLeaderboard([...earlierWeeks, { week, matchups }]);
-      } catch (err) {
-        leaderboardError = err instanceof Error ? err : new Error(String(err));
+      } catch (error) {
+        leaderboardError = error instanceof Error ? error : new Error(String(error));
         console.warn(`[${league.displayName}] Sending without the season leaderboard:`, leaderboardError.message);
       }
     }
@@ -118,9 +118,9 @@ async function runLeagueRecap(
     const roast = await generateRoast(
       awards,
       {
-        apiKey: shared.anthropicApiKey,
-        model: shared.anthropicModel,
-        pipeline: shared.roastPipeline,
+        apiKey: sharedConfig.anthropicApiKey,
+        model: sharedConfig.anthropicModel,
+        pipeline: sharedConfig.roastPipeline,
         league: league.displayName,
       },
       leaderboard,
@@ -129,7 +129,7 @@ async function runLeagueRecap(
     const subject = formatSubject(week, league.displayName);
     const body = formatEmailBody(awards, roast, leaderboard);
 
-    if (args.dryRun) {
+    if (options.dryRun) {
       console.info(`\n--- DRY RUN: ${league.displayName} (not sending) ---`);
       console.info(`Subject: ${subject}\n`);
       console.info(body);
@@ -137,16 +137,16 @@ async function runLeagueRecap(
     }
 
     await sendRecap({
-      apiKey: shared.resendApiKey,
-      from: shared.emailFrom,
+      apiKey: sharedConfig.resendApiKey,
+      from: sharedConfig.emailFrom,
       to: league.recipientEmails,
       subject,
       text: body,
     });
     console.info(`[${league.displayName}] Sent the Week ${week} recap to ${league.recipientEmails.join(', ')}.`);
     return { leagueId: league.id, status: 'sent', leaderboardError };
-  } catch (err) {
-    const error = err instanceof Error ? err : new Error(String(err));
+  } catch (caught) {
+    const error = caught instanceof Error ? caught : new Error(String(caught));
     console.error(`[${league.displayName}] Recap failed:`, error.message);
     return { leagueId: league.id, status: 'failed', error };
   }
@@ -161,15 +161,15 @@ export function cookieFixesFor(leagueId: string, error: Error, secrets: Record<s
 
 /** Pure summary of a batch of league results: which failed, and the process exit code. */
 export function summarize(results: RecapResult[]): { failed: RecapResult[]; exitCode: number } {
-  const failed = results.filter((r) => r.status === 'failed');
+  const failed = results.filter((result) => result.status === 'failed');
   return { failed, exitCode: failed.length > 0 ? 1 : 0 };
 }
 
 async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
-  const shared = loadSharedConfig();
+  const options = parseCommandLineOptions(process.argv.slice(2));
+  const sharedConfig = loadSharedConfig();
 
-  const leagues = parseLeaguesJson(readFileSync(join(REPO_ROOT, 'leagues.json'), 'utf8'));
+  const leagues = parseLeaguesJson(readFileSync(join(REPOSITORY_ROOT, 'leagues.json'), 'utf8'));
   const secrets = parseLeagueSecretsJson(required('LEAGUE_SECRETS_JSON'));
 
   if (leagues.length === 0) {
@@ -177,44 +177,59 @@ async function main(): Promise<void> {
     return;
   }
 
-  const settled = await Promise.allSettled(leagues.map((l) => runLeagueRecap(l, secrets, shared, args)));
-  const results: RecapResult[] = settled.map((s, i) =>
-    s.status === 'fulfilled' ? s.value : { leagueId: leagues[i]!.id, status: 'failed', error: s.reason },
+  const settledRecaps = await Promise.allSettled(
+    leagues.map((league) => runLeagueRecap(league, secrets, sharedConfig, options)),
+  );
+  const results: RecapResult[] = settledRecaps.map((settlement, i) =>
+    settlement.status === 'fulfilled'
+      ? settlement.value
+      : { leagueId: leagues[i]!.id, status: 'failed', error: settlement.reason },
   );
 
   const { failed, exitCode } = summarize(results);
-  const leagueById = new Map(leagues.map((l) => [l.id, l]));
+  const leagueById = new Map(leagues.map((league) => [league.id, league]));
 
-  if (!args.dryRun) {
+  if (!options.dryRun) {
     const runUrl = githubRunUrl();
 
-    const alertBase = { apiKey: shared.resendApiKey, from: shared.emailFrom, ownerEmail: shared.ownerAlertEmail, runUrl };
+    const sharedAlertOptions = {
+      apiKey: sharedConfig.resendApiKey,
+      from: sharedConfig.emailFrom,
+      ownerEmail: sharedConfig.ownerAlertEmail,
+      runUrl,
+    };
     const alertJobs = [
-      ...failed.map((r) => {
-        const league = leagueById.get(r.leagueId)!;
-        const fixes = cookieFixesFor(r.leagueId, r.error!, secrets);
-        return { league, failure: true, send: () => sendFailureAlert({ ...alertBase, league, error: r.error!, fixes }) };
+      ...failed.map((result) => {
+        const league = leagueById.get(result.leagueId)!;
+        const fixes = cookieFixesFor(result.leagueId, result.error!, secrets);
+        return {
+          league,
+          failure: true,
+          send: () => sendFailureAlert({ ...sharedAlertOptions, league, error: result.error!, fixes }),
+        };
       }),
       ...results
-        .filter((r) => r.leaderboardError)
-        .map((r) => {
-          const league = leagueById.get(r.leagueId)!;
+        .filter((result) => result.leaderboardError)
+        .map((result) => {
+          const league = leagueById.get(result.leagueId)!;
           return {
             league,
             failure: false,
-            send: () => sendLeaderboardSkippedAlert({ ...alertBase, league, error: r.leaderboardError! }),
+            send: () => sendLeaderboardSkippedAlert({ ...sharedAlertOptions, league, error: result.leaderboardError! }),
           };
         }),
     ];
 
-    const alerts = await Promise.allSettled(alertJobs.map((job) => job.send()));
-    alerts.forEach((a, i) => {
-      if (a.status === 'rejected') {
-        console.error(`[${alertJobs[i]!.league.displayName}] Alert did not send:`, a.reason);
+    const settledAlerts = await Promise.allSettled(alertJobs.map((job) => job.send()));
+    settledAlerts.forEach((settlement, i) => {
+      if (settlement.status === 'rejected') {
+        console.error(`[${alertJobs[i]!.league.displayName}] Alert did not send:`, settlement.reason);
       }
     });
 
-    const everyFailedLeagueAlerted = alerts.every((a, i) => !alertJobs[i]!.failure || a.status === 'fulfilled');
+    const everyFailedLeagueAlerted = settledAlerts.every(
+      (settlement, i) => !alertJobs[i]!.failure || settlement.status === 'fulfilled',
+    );
     if (failed.length > 0 && everyFailedLeagueAlerted) {
       setGithubOutput('alerted', 'true');
     }
@@ -226,8 +241,8 @@ async function main(): Promise<void> {
 
 const isRunDirectly = import.meta.url === `file://${process.argv[1]}`;
 if (isRunDirectly) {
-  main().catch((err) => {
-    console.error('Recap failed:', err instanceof Error ? err.message : err);
+  main().catch((error) => {
+    console.error('Recap failed:', error instanceof Error ? error.message : error);
     process.exitCode = 1;
   });
 }

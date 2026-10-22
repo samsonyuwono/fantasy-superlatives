@@ -21,11 +21,11 @@ const awards: WeekAwards = {
   ballerOfTheWeek: { team: 'Alpha', player: 'Puka Nacua', points: 31 },
   sleepwalker: {
     team: 'Delta', teamId: 3, pointsLeft: 40, actual: 80, optimal: 120,
-    matchup: { result: 'won', score: 80, opponent: 'Echo', opponentScore: 75, flipped: false },
+    matchup: { result: 'won', score: 80, opponent: 'Echo', opponentScore: 75, mistakeCostTheWin: false },
   },
   bonehead: { team: 'Alpha', teamId: 1, benched: 'A', benchedPoints: 20, started: 'B', startedPoints: 2, slot: 'WR', regret: 18 },
-  backedIntoIt: { team: 'Charlie', teamId: 5, score: 70, allPlayWinPct: 0.2, allPlay: { beaten: 2, tied: 0, opponents: 9 } },
-  robbed: { team: 'Alpha', teamId: 1, score: 110, allPlayWinPct: 0.75, allPlay: { beaten: 6, tied: 1, opponents: 9 } },
+  backedIntoIt: { team: 'Charlie', teamId: 5, score: 70, allPlayWinPercentage: 0.2, allPlay: { beaten: 2, tied: 0, otherTeams: 9 } },
+  robbed: { team: 'Alpha', teamId: 1, score: 110, allPlayWinPercentage: 0.75, allPlay: { beaten: 6, tied: 1, otherTeams: 9 } },
 };
 
 const leaderboard: SeasonLeaderboard = {
@@ -38,7 +38,7 @@ const leaderboard: SeasonLeaderboard = {
     backedIntoIt: { teams: ['Charlie'], count: 2 },
     robbed: { teams: ['Alpha', 'Bravo'], count: 2 },
   },
-  counts: {
+  winsByTeamId: {
     juggernaut: new Map([[2, 2]]),
     corpse: new Map([[4, 3]]),
     sleepwalker: new Map([[3, 2]]),
@@ -46,7 +46,7 @@ const leaderboard: SeasonLeaderboard = {
     backedIntoIt: new Map([[5, 2]]),
     robbed: new Map([[1, 2], [2, 2]]),
   },
-  nameById: new Map(),
+  latestNameByTeamId: new Map(),
 };
 
 describe('formatLeaderboard', () => {
@@ -62,11 +62,11 @@ describe('formatLeaderboard', () => {
   });
 
   it('leaves out Baller of the Week, which is about a player, not a team', () => {
-    expect(lines.some((l) => l.includes('Baller of the Week'))).toBe(false);
+    expect(lines.some((line) => line.includes('Baller of the Week'))).toBe(false);
   });
 
   it('skips awards nobody has won yet', () => {
-    expect(lines.some((l) => l.includes('The Bonehead'))).toBe(false);
+    expect(lines.some((line) => line.includes('The Bonehead'))).toBe(false);
   });
 
   it('shows The Sleepwalker as a win count like the other awards', () => {

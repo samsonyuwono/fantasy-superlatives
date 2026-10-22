@@ -47,14 +47,14 @@ function main(): void {
         )
       : [];
 
-  const skip = shouldSkipFallback(eventName, recentRuns, new Date());
+  const shouldSkip = shouldSkipFallback(eventName, recentRuns, new Date());
   console.info(
-    skip
+    shouldSkip
       ? `The 9am-triggered run already happened today (${newYorkDate(new Date())}). Skipping the fallback.`
       : `Proceeding with the recap (event: ${eventName || 'unknown'}).`,
   );
 
-  setGithubOutput('skip', String(skip));
+  setGithubOutput('skip', String(shouldSkip));
 }
 
 const isRunDirectly = import.meta.url === `file://${process.argv[1]}`;

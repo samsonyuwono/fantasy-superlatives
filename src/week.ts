@@ -1,10 +1,10 @@
 export const FIRST_WEEK = 1;
 export const LAST_WEEK = 14;
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 
-function parseDateAsUtcMidnight(dateStr: string): number {
-  return Date.parse(`${dateStr}T00:00:00Z`);
+function parseDateAsUtcMidnight(date: string): number {
+  return Date.parse(`${date}T00:00:00Z`);
 }
 
 /**
@@ -15,7 +15,7 @@ function parseDateAsUtcMidnight(dateStr: string): number {
  * Returns < 1 before the season starts.
  */
 export function completedWeek(anchorTuesday: string, today: Date): number {
-  const daysSinceAnchor = (today.getTime() - parseDateAsUtcMidnight(anchorTuesday)) / MS_PER_DAY;
+  const daysSinceAnchor = (today.getTime() - parseDateAsUtcMidnight(anchorTuesday)) / MILLISECONDS_PER_DAY;
   return Math.round(daysSinceAnchor / 7) + 1;
 }
 

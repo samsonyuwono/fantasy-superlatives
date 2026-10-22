@@ -92,24 +92,24 @@ describe('lineupSlotsFromCounts', () => {
 
 describe('withRetry', () => {
   it('tries once more after a failure', async () => {
-    let calls = 0;
+    let attempts = 0;
     const result = await withRetry(async () => {
-      calls += 1;
-      if (calls === 1) throw new Error('ESPN hiccup');
+      attempts += 1;
+      if (attempts === 1) throw new Error('ESPN hiccup');
       return 'ok';
     }, 0);
     expect(result).toBe('ok');
-    expect(calls).toBe(2);
+    expect(attempts).toBe(2);
   });
 
   it('gives up after the second failure', async () => {
-    let calls = 0;
+    let attempts = 0;
     const failing = () => {
-      calls += 1;
-      return Promise.reject(new Error(`fail ${calls}`));
+      attempts += 1;
+      return Promise.reject(new Error(`fail ${attempts}`));
     };
     await expect(withRetry(failing, 0)).rejects.toThrow('fail 2');
-    expect(calls).toBe(2);
+    expect(attempts).toBe(2);
   });
 });
 
@@ -117,12 +117,12 @@ describe('mapInBatches', () => {
   it('keeps the input order and never runs more than the batch size at once', async () => {
     let running = 0;
     let maxRunning = 0;
-    const result = await mapInBatches([1, 2, 3, 4, 5, 6, 7], 3, async (n) => {
+    const result = await mapInBatches([1, 2, 3, 4, 5, 6, 7], 3, async (item) => {
       running += 1;
       maxRunning = Math.max(maxRunning, running);
       await new Promise((resolve) => setTimeout(resolve, 1));
       running -= 1;
-      return n * 10;
+      return item * 10;
     });
     expect(result).toEqual([10, 20, 30, 40, 50, 60, 70]);
     expect(maxRunning).toBe(3);
@@ -133,15 +133,15 @@ describe('leagueFetcher', () => {
   it('fetches team names for this week but not for earlier weeks', async () => {
     calls.boxscores.length = 0;
     calls.teams.length = 0;
-    const espn = leagueFetcher({ leagueId: 1, seasonYear: 2026 });
+    const fetcher = leagueFetcher({ leagueId: 1, seasonYear: 2026 });
 
-    const current = await espn.week(4);
-    const earlier = await espn.earlierWeeks([1, 2, 3]);
+    const current = await fetcher.week(4);
+    const earlier = await fetcher.earlierWeeks([1, 2, 3]);
 
     expect(calls.boxscores.sort()).toEqual([1, 2, 3, 4]);
     expect(calls.teams).toEqual([4]);
     expect(current.matchups[0]!.home.name).toBe('Alpha');
-    expect(earlier.map((w) => w.week)).toEqual([1, 2, 3]);
+    expect(earlier.map((earlierWeek) => earlierWeek.week)).toEqual([1, 2, 3]);
     expect(earlier[0]!.matchups[0]!.home.name).toBe('Team 1');
     expect(earlier[0]!.matchups[0]!.home.lineupSlots).toEqual(['QB']);
   });
@@ -160,12 +160,12 @@ describe('httpStatus', () => {
 });
 
 describe('checkLeagueAccess', () => {
-  const cfg = { leagueId: 123, seasonYear: 2026, espnS2: 's2', swid: '{swid}' };
+  const config = { leagueId: 123, seasonYear: 2026, espnS2: 's2', swid: '{swid}' };
   const failure = async () => {
     try {
-      await checkLeagueAccess(cfg);
-    } catch (err) {
-      return err;
+      await checkLeagueAccess(config);
+    } catch (error) {
+      return error;
     } finally {
       calls.leagueInfo = 'ok';
     }
@@ -174,43 +174,43 @@ describe('checkLeagueAccess', () => {
 
   it('resolves when ESPN returns the league settings', async () => {
     calls.leagueInfo = 'ok';
-    await expect(checkLeagueAccess(cfg)).resolves.toBeUndefined();
+    await expect(checkLeagueAccess(config)).resolves.toBeUndefined();
   });
 
   it('marks a 401 as an auth failure, with a cookie hint', async () => {
     calls.leagueInfo = 401;
-    const err = await failure();
-    expect(err).toBeInstanceOf(EspnAccessError);
-    expect(err).toMatchObject({ failure: 'rejected', status: 401, isAuthFailure: true });
-    expect(String(err)).toMatch(/league 123.*401.*cookies may have expired/);
+    const error = await failure();
+    expect(error).toBeInstanceOf(EspnAccessError);
+    expect(error).toMatchObject({ failure: 'rejected', status: 401, isAuthFailure: true });
+    expect(String(error)).toMatch(/league 123.*401.*cookies may have expired/);
   });
 
   it('does not blame the cookies for a server error', async () => {
     calls.leagueInfo = 503;
-    const err = await failure();
-    expect(err).toMatchObject({ failure: 'rejected', status: 503, isAuthFailure: false });
-    expect(String(err)).not.toContain('cookies');
+    const error = await failure();
+    expect(error).toMatchObject({ failure: 'rejected', status: 503, isAuthFailure: false });
+    expect(String(error)).not.toContain('cookies');
   });
 
   it('says ESPN could not be reached for a network error, not that it rejected the request', async () => {
     calls.leagueInfo = 'network';
-    const err = await failure();
-    expect(err).toMatchObject({ failure: 'unreachable', status: undefined });
-    expect(String(err)).toMatch(/Could not reach ESPN for league 123 \(season 2026\): getaddrinfo ENOTFOUND/);
+    const error = await failure();
+    expect(error).toMatchObject({ failure: 'unreachable', status: undefined });
+    expect(String(error)).toMatch(/Could not reach ESPN for league 123 \(season 2026\): getaddrinfo ENOTFOUND/);
   });
 
   it('says the response could not be read when the library throws while parsing it', async () => {
     calls.leagueInfo = 'unreadable';
-    const err = await failure();
-    expect(err).toMatchObject({ failure: 'unreadable', status: undefined });
-    expect(String(err)).toMatch(/ESPN sent a response for league 123 .* that could not be read: Cannot read properties/);
-    expect(String(err)).not.toContain('rejected');
+    const error = await failure();
+    expect(error).toMatchObject({ failure: 'unreadable', status: undefined });
+    expect(String(error)).toMatch(/ESPN sent a response for league 123 .* that could not be read: Cannot read properties/);
+    expect(String(error)).not.toContain('rejected');
   });
 
   it('rejects without a status when ESPN returns no settings', async () => {
     calls.leagueInfo = 'empty';
-    const err = await failure();
-    expect(err).toMatchObject({ failure: 'unreadable', status: undefined, isAuthFailure: false });
-    expect(String(err)).toMatch(/no settings for league 123/);
+    const error = await failure();
+    expect(error).toMatchObject({ failure: 'unreadable', status: undefined, isAuthFailure: false });
+    expect(String(error)).toMatch(/no settings for league 123/);
   });
 });
