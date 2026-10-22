@@ -1,15 +1,3 @@
-/**
- * Fallback guard for the weekly workflow.
- *
- * The on-time 9am ET send is a `workflow_dispatch` from an external scheduler, titled
- * NINE_AM_RUN_TITLE via the workflow's `run-name`. GitHub's own `schedule` trigger is only a
- * fallback in case that dispatch never fired, so on a scheduled run we skip whenever today's
- * 9am run already exists — whatever its result, since recap.ts may have sent some leagues
- * before another failed (and that failure was already alerted).
- *
- * Usage (the guard step of the workflow's recap job):
- *   tsx src/guard.ts   # reads GITHUB_EVENT_NAME, writes skip=true|false to $GITHUB_OUTPUT
- */
 import { execFileSync } from 'node:child_process';
 import { setGithubOutput } from './env.js';
 
@@ -31,7 +19,13 @@ export function newYorkDate(date: Date): string {
   }).format(date);
 }
 
-/** True when this is a scheduled (fallback) run and today's 9am-triggered run already exists. */
+/**
+ * True when this is a scheduled (fallback) run and today's 9am-triggered run already exists. The on-time
+ * 9am ET send is a `workflow_dispatch` from an external scheduler, titled NINE_AM_RUN_TITLE; GitHub's own
+ * `schedule` trigger is only a fallback in case that dispatch never fired. The 9am run counts whatever
+ * its result, since recap.ts may have sent some leagues before another failed (and that failure was
+ * already alerted).
+ */
 export function shouldSkipFallback(eventName: string, recentRuns: WorkflowRun[], now: Date): boolean {
   if (eventName !== 'schedule') return false;
   const today = newYorkDate(now);
@@ -63,7 +57,7 @@ function main(): void {
   setGithubOutput('skip', String(skip));
 }
 
-// Only run when executed directly (`tsx src/guard.ts`), not when imported by tests.
-if (import.meta.url === `file://${process.argv[1]}`) {
+const isRunDirectly = import.meta.url === `file://${process.argv[1]}`;
+if (isRunDirectly) {
   main();
 }

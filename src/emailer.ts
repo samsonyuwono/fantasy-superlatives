@@ -1,6 +1,3 @@
-/**
- * Sends the recap via the Resend API — no personal mailbox or SMTP sender required.
- */
 import { Resend } from 'resend';
 
 export interface SendOptions {
@@ -11,7 +8,10 @@ export interface SendOptions {
   text: string;
 }
 
-/** Send the recap email. Throws if Resend reports an error. */
+/**
+ * Send the recap email through the Resend API, so no personal mailbox or SMTP sender is needed.
+ * Throws if Resend reports an error.
+ */
 export async function sendRecap(opts: SendOptions): Promise<void> {
   const resend = new Resend(opts.apiKey);
   const { error } = await resend.emails.send({
@@ -25,15 +25,15 @@ export async function sendRecap(opts: SendOptions): Promise<void> {
   }
 }
 
-/** How alerts name a league: its display name, plus the id that keys its cookies in LEAGUE_SECRETS_JSON. */
 export interface AlertLeague {
   id: string;
   displayName: string;
 }
 
 /**
- * Subject and text for a failed recap. Pass `fixes` when ESPN rejected the cookies, to add the
- * steps for refreshing them and re-sending the recap.
+ * Subject and text for a failed recap. The league is named by its display name plus the id that keys
+ * its cookies in LEAGUE_SECRETS_JSON. Pass `fixes` when ESPN rejected the cookies, to add the steps for
+ * refreshing them and re-sending the recap.
  */
 export function failureAlertContent(
   league: AlertLeague,
@@ -77,7 +77,6 @@ export async function sendFailureAlert(opts: {
   }
 }
 
-/** Why a league failed the Monday check, which decides what the alert tells the owner to do. */
 export type FailureKind = 'cookies' | 'unclear' | 'missing-secret' | 'other';
 
 export interface CheckFailure {
@@ -86,10 +85,6 @@ export interface CheckFailure {
   kind: FailureKind;
 }
 
-/**
- * The LEAGUE_SECRETS_JSON entries to fix. `accounts` groups the entries to refresh by ESPN
- * account, since each league keeps its own copy of an account's cookies; `missing` needs adding.
- */
 export interface SecretFixes {
   accounts: string[][];
   missing: string[];
@@ -120,7 +115,11 @@ function secretFixItems(fixes: SecretFixes): string[] {
   ];
 }
 
-/** Steps for refreshing or adding cookies in LEAGUE_SECRETS_JSON. */
+/**
+ * Steps for refreshing or adding cookies in LEAGUE_SECRETS_JSON. `fixes.accounts` groups the entries to
+ * refresh by ESPN account, since each league keeps its own copy of an account's cookies;
+ * `fixes.missing` lists the entries to add.
+ */
 export function cookieFixSteps(fixes: SecretFixes): FixStep[] {
   return [
     {
@@ -194,7 +193,10 @@ function stepsHtml(steps: FixStep[], numbered: boolean): string[] {
   ];
 }
 
-/** Subject, plain text and HTML for the Monday check alert, all built from the same content. */
+/**
+ * Subject, plain text and HTML for the Monday check alert, all built from the same content. Each
+ * failure's `kind` (why the league failed) decides what the alert tells the owner to do.
+ */
 export function espnCheckAlertContent(
   failures: CheckFailure[],
   fixes: SecretFixes,

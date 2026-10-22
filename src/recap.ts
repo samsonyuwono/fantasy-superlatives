@@ -1,14 +1,3 @@
-/**
- * Weekly entrypoint: for every league in `leagues.json`, determine the just-completed NFL
- * week, fetch it from ESPN, compute the superlatives, have Claude write the roast, then email
- * it (or print it with --dry-run). Each league runs independently — one league's failure never
- * blocks another's email — and the owner gets a failure alert per failed league.
- *
- * Usage:
- *   tsx src/recap.ts               # normal weekly run (honours the Weeks 1–14 gate)
- *   tsx src/recap.ts --week 5      # force a specific week (bypasses the gate)
- *   tsx src/recap.ts --dry-run     # print each league's email to stdout instead of sending
- */
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -79,7 +68,6 @@ function loadSharedConfig(): SharedConfig {
   };
 }
 
-/** Run the full pipeline for one league. Never throws — failures are reported in the result. */
 async function runLeagueRecap(
   league: LeagueConfig,
   secrets: Record<string, LeagueSecrets>,
@@ -87,9 +75,10 @@ async function runLeagueRecap(
   args: Args,
 ): Promise<RecapResult> {
   try {
+    const isWeekForced = args.week !== undefined;
     const week = args.week ?? completedWeek(league.seasonWeek1Tuesday, new Date());
 
-    if (args.week === undefined && !isInSeason(week)) {
+    if (!isWeekForced && !isInSeason(week)) {
       console.info(`[${league.displayName}] Week ${week} is outside the regular season (Weeks 1–14). Nothing to send.`);
       return { leagueId: league.id, status: 'skipped' };
     }
@@ -189,7 +178,6 @@ async function main(): Promise<void> {
   }
 
   const settled = await Promise.allSettled(leagues.map((l) => runLeagueRecap(l, secrets, shared, args)));
-  // runLeagueRecap never throws, so every settlement is 'fulfilled'; unwrap defensively anyway.
   const results: RecapResult[] = settled.map((s, i) =>
     s.status === 'fulfilled' ? s.value : { leagueId: leagues[i]!.id, status: 'failed', error: s.reason },
   );
@@ -226,8 +214,8 @@ async function main(): Promise<void> {
       }
     });
 
-    // Tells the workflow's crash step that every failed league has already been alerted.
-    if (failed.length > 0 && alerts.every((a, i) => !alertJobs[i]!.failure || a.status === 'fulfilled')) {
+    const everyFailedLeagueAlerted = alerts.every((a, i) => !alertJobs[i]!.failure || a.status === 'fulfilled');
+    if (failed.length > 0 && everyFailedLeagueAlerted) {
       setGithubOutput('alerted', 'true');
     }
   }
@@ -236,8 +224,8 @@ async function main(): Promise<void> {
   process.exitCode = exitCode;
 }
 
-// Only run when executed directly (`tsx src/recap.ts`), not when imported by tests.
-if (import.meta.url === `file://${process.argv[1]}`) {
+const isRunDirectly = import.meta.url === `file://${process.argv[1]}`;
+if (isRunDirectly) {
   main().catch((err) => {
     console.error('Recap failed:', err instanceof Error ? err.message : err);
     process.exitCode = 1;

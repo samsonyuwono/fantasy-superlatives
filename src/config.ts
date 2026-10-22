@@ -1,8 +1,3 @@
-/**
- * Multi-league config: parses the committed `leagues.json` (non-secret) and the
- * `LEAGUE_SECRETS_JSON` env var (one GitHub Secret holding every league's ESPN cookies,
- * keyed by league id) and resolves the two into the `EspnConfig` each league's fetch needs.
- */
 import type { EspnConfig } from './espn.js';
 
 export interface LeagueConfig {
@@ -12,7 +7,6 @@ export interface LeagueConfig {
   seasonYear: number;
   seasonWeek1Tuesday: string;
   recipientEmails: string[];
-  /** Public ESPN leagues need no cookies at all. Defaults to true. */
   requiresAuth?: boolean;
 }
 
@@ -84,7 +78,10 @@ export function parseLeaguesJson(raw: string): LeagueConfig[] {
   return leagues;
 }
 
-/** Parse the `LEAGUE_SECRETS_JSON` secret: an object keyed by league id. */
+/**
+ * Parse the `LEAGUE_SECRETS_JSON` secret: one GitHub Secret holding every league's ESPN
+ * cookies, as an object keyed by league id.
+ */
 export function parseLeagueSecretsJson(raw: string): Record<string, LeagueSecrets> {
   let parsed: unknown;
   try {
@@ -109,9 +106,10 @@ export function parseLeagueSecretsJson(raw: string): Record<string, LeagueSecret
 }
 
 /**
- * Resolve one league's ESPN cookies from the secrets map. Throws a league-named error if
- * auth is required (the default) and no matching secret entry exists — a missing entry
- * should be a loud config error, not a silent unauthenticated fetch against a private league.
+ * Resolve one league's ESPN cookies from the secrets map. `requiresAuth` defaults to true;
+ * only a public ESPN league, which needs no cookies, sets it to false. Throws a league-named
+ * error if auth is required and no matching secret entry exists — a missing entry should be
+ * a loud config error, not a silent unauthenticated fetch against a private league.
  */
 export function resolveEspnConfig(league: LeagueConfig, secrets: Record<string, LeagueSecrets>): EspnConfig {
   const entry = secrets[league.id];

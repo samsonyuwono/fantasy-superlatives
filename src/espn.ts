@@ -1,7 +1,3 @@
-/**
- * ESPN adapter: fetch one week's box scores + team records and normalize them into the
- * plain shapes that `awards.ts` consumes. This is the only module that talks to ESPN.
- */
 import espn from 'espn-fantasy-football-api/node';
 import type { NormalizedMatchup, NormalizedPlayer, NormalizedTeam } from './awards.js';
 
@@ -43,12 +39,14 @@ interface EspnClient {
 export interface EspnConfig {
   leagueId: number;
   seasonYear: number;
-  /** Omit both for a public league — no ESPN login is needed to read it. */
   espnS2?: string;
   swid?: string;
 }
 
-/** Public leagues need no cookies at all; only set them when both are present. */
+/**
+ * Public leagues need no ESPN login, so their config omits both `espnS2` and `swid`.
+ * Only set cookies when both are present.
+ */
 export function shouldSetCookies(cfg: EspnConfig): boolean {
   return Boolean(cfg.espnS2 && cfg.swid);
 }
@@ -107,10 +105,6 @@ function makeClient(cfg: EspnConfig): EspnClient {
   return client;
 }
 
-/**
- * Lineup settings let awards count slots a manager left empty. Not essential: without
- * them the awards fall back to the slots each manager actually started.
- */
 async function fetchLineupSlots(client: EspnClient, cfg: EspnConfig): Promise<string[] | undefined> {
   const league = await client.getLeagueInfo({ seasonId: cfg.seasonYear }).catch((err: unknown) => {
     console.warn(`Could not load league lineup settings; using started slots instead. (${String(err)})`);
@@ -149,11 +143,7 @@ async function fetchWeekWith(
   return { matchups };
 }
 
-/**
- * How many earlier weeks to fetch from ESPN at once, so a late-season tally isn't one big burst
- * of requests. Each one is a single request, since earlier weeks skip the team names.
- */
-const WEEKS_AT_ONCE = 6;
+const EARLIER_WEEKS_FETCHED_AT_ONCE = 6;
 const RETRY_DELAY_MS = 1000;
 
 /** Run `fn`, and if it fails, wait and try once more. */
@@ -175,13 +165,8 @@ export async function mapInBatches<T, R>(items: T[], size: number, fn: (item: T)
   return results;
 }
 
-/**
- * How an ESPN access check failed: ESPN answered with an HTTP error, couldn't be reached at all,
- * or answered with something other than the league's settings.
- */
 export type EspnFailure = 'rejected' | 'unreachable' | 'unreadable';
 
-/** A failed ESPN access check. `status` is ESPN's HTTP status, when it sent one. */
 export class EspnAccessError extends Error {
   constructor(
     message: string,
@@ -192,7 +177,6 @@ export class EspnAccessError extends Error {
     this.name = 'EspnAccessError';
   }
 
-  /** ESPN answers 401 or 403 when it rejects the cookies, e.g. because they expired. */
   static isAuthStatus(status: number | undefined): boolean {
     return status === 401 || status === 403;
   }
@@ -210,15 +194,15 @@ export function httpStatus(err: unknown): number | undefined {
   return typeof response.status === 'number' ? response.status : undefined;
 }
 
-/** True for an axios request error, as opposed to the library failing to read a response. */
-function isRequestError(err: unknown): boolean {
+function isAxiosRequestError(err: unknown): boolean {
   return typeof err === 'object' && err !== null && 'isAxiosError' in err && err.isAxiosError === true;
 }
 
 /**
  * Confirm ESPN will serve this league's settings with the configured cookies. Throws an
- * EspnAccessError saying whether ESPN rejected the request, couldn't be reached, or sent
- * something other than the settings.
+ * EspnAccessError whose `failure` is 'rejected' (ESPN answered with an HTTP error, kept in
+ * `status`; 401/403 means the cookies were refused, e.g. expired), 'unreachable' (the request
+ * never got an answer), or 'unreadable' (ESPN answered with something other than the settings).
  */
 export async function checkLeagueAccess(cfg: EspnConfig): Promise<void> {
   const where = `league ${cfg.leagueId} (season ${cfg.seasonYear})`;
@@ -232,7 +216,7 @@ export async function checkLeagueAccess(cfg: EspnConfig): Promise<void> {
       const hint = EspnAccessError.isAuthStatus(status) ? ' The espn_s2/SWID cookies may have expired.' : '';
       throw new EspnAccessError(`ESPN rejected the request for ${where}: ${detail}.${hint}`, 'rejected', status);
     }
-    if (isRequestError(err)) {
+    if (isAxiosRequestError(err)) {
       throw new EspnAccessError(`Could not reach ESPN for ${where}: ${detail}.`, 'unreachable');
     }
     throw new EspnAccessError(`ESPN sent a response for ${where} that could not be read: ${detail}.`, 'unreadable');
@@ -243,19 +227,24 @@ export async function checkLeagueAccess(cfg: EspnConfig): Promise<void> {
 }
 
 export interface LeagueFetcher {
-  /** Fetch and normalize one week, with team names. */
   week(week: number): Promise<WeekData>;
   earlierWeeks(weeks: number[]): Promise<(WeekData & { week: number })[]>;
 }
 
-/** One ESPN client and one lineup-settings lookup, shared by every week fetched for a league. */
+/**
+ * One ESPN client and one lineup-settings lookup, shared by every week fetched for a league.
+ * `week` includes team names; `earlierWeeks` skips them so each week is a single request, and
+ * fetches a few weeks at a time so a late-season tally isn't one big burst of requests.
+ * The lineup settings let awards count slots a manager left empty; if they can't be loaded,
+ * the awards fall back to the slots each manager actually started.
+ */
 export function leagueFetcher(cfg: EspnConfig): LeagueFetcher {
   const client = makeClient(cfg);
   const lineupSlots = fetchLineupSlots(client, cfg);
   return {
     week: (week) => fetchWeekWith(client, cfg, week, lineupSlots, true),
     earlierWeeks: (weeks) =>
-      mapInBatches(weeks, WEEKS_AT_ONCE, async (week) => ({
+      mapInBatches(weeks, EARLIER_WEEKS_FETCHED_AT_ONCE, async (week) => ({
         week,
         ...(await withRetry(() => fetchWeekWith(client, cfg, week, lineupSlots, false))),
       })),

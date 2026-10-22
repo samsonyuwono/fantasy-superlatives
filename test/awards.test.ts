@@ -2,22 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { computeAwards, matchupOutcome, optimalLineupPoints } from '../src/awards.js';
 import type { NormalizedMatchup, NormalizedPlayer, NormalizedTeam } from '../src/awards.js';
 
-/**
- * Fixture week — 4 teams, 2 matchups. Every award has a single, hand-computed winner.
- *
- * Scores:  Bravo 82 > Alpha 50 > Charlie 47 > Delta 26
- * Matchup 1: Alpha (50) vs Bravo (82)  -> Bravo wins
- * Matchup 2: Charlie (47) vs Delta (26) -> Charlie wins
- *
- * All-play (out of 3):  Bravo 100% | Alpha 66.7% | Charlie 33.3% | Delta 0%
- *   Backed Into It (luckiest win)  = winner w/ lowest all-play% -> Charlie (won but 33.3%)
- *   Robbed (unluckiest loss)       = loser  w/ highest all-play% -> Alpha  (lost but 66.7%)
- *
- * Alpha benched Puka (25 WR) while starting someRB (5) at FLEX:
- *   The Sleepwalker (most points left on bench) -> Alpha (+20)
- *   The Bonehead   (worst single start/sit)     -> Alpha (Puka 25 over someRB 5 = 20 regret)
- */
-
 const p = (name: string, points: number, slot: string, eligibleSlots: string[]): NormalizedPlayer => ({
   name,
   points,
@@ -34,7 +18,7 @@ const alpha: NormalizedTeam = {
     p('Bijan Robinson', 15, 'RB', ['RB', 'FLEX']),
     p('Justin Jefferson', 10, 'WR', ['WR', 'FLEX']),
     p('Some Back', 5, 'FLEX', ['RB', 'FLEX']),
-    p('Puka Nacua', 25, 'Bench', ['WR', 'FLEX']), // stranded on the bench
+    p('Puka Nacua', 25, 'Bench', ['WR', 'FLEX']),
     p('Backup QB', 2, 'Bench', ['QB']),
   ],
 };
@@ -46,7 +30,7 @@ const bravo: NormalizedTeam = {
   players: [
     p('Justin Herbert', 18, 'QB', ['QB']),
     p('Saquon Barkley', 22, 'RB', ['RB', 'FLEX']),
-    p("Ja'Marr Chase", 30, 'WR', ['WR', 'FLEX']), // top starter in the league
+    p("Ja'Marr Chase", 30, 'WR', ['WR', 'FLEX']),
     p('George Kittle', 12, 'FLEX', ['TE', 'FLEX']),
     p('Bench RB', 3, 'Bench', ['RB', 'FLEX']),
     p('Bench WR', 1, 'Bench', ['WR', 'FLEX']),
@@ -86,7 +70,7 @@ const matchups: NormalizedMatchup[] = [
   { home: charlie, away: delta },
 ];
 
-describe('computeAwards', () => {
+describe('computeAwards on a 4-team week where every award has one hand-computed winner', () => {
   const awards = computeAwards(matchups, 3);
 
   it('The Juggernaut is the highest-scoring team', () => {
@@ -105,7 +89,7 @@ describe('computeAwards', () => {
     expect(awards.ballerOfTheWeek.points).toBe(30);
   });
 
-  it('The Sleepwalker left the most points on the bench (optimal - actual)', () => {
+  it('The Sleepwalker left the most points on the bench (optimal - actual), e.g. Puka Nacua', () => {
     expect(awards.sleepwalker.team).toBe('Alpha');
     expect(awards.sleepwalker.pointsLeft).toBeCloseTo(20, 5);
     expect(awards.sleepwalker.optimal).toBeCloseTo(70, 5);
@@ -175,8 +159,7 @@ describe('matchup results and outcomes', () => {
     expect(won.sleepwalker.matchup).toEqual({ result: 'won', score: 50, opponent: 'Bravo', opponentScore: 40, flipped: false });
   });
 
-  it("judges the Sleepwalker by the optimal score on the sheet, not ESPN's team score", () => {
-    // ESPN says 51 but the starters add up to 50, so optimal is 70: short of Bravo's 70.5.
+  it("judges the Sleepwalker by the optimal score on the sheet (70), not ESPN's team score (51 vs starters' 50)", () => {
     const espnAlpha = { ...alpha, score: 51 };
     const closeBravo = { ...bravo, score: 70.5 };
     const close = computeAwards([{ home: espnAlpha, away: closeBravo }, { home: charlie, away: delta }], 3);
@@ -228,11 +211,10 @@ describe('weeks with no decided matchups (e.g. no scores yet)', () => {
 });
 
 describe('optimalLineupPoints with two FLEX slots', () => {
-  // Lineup: QB + 2x FLEX ('RB/WR/TE'). Two studs are stranded on the bench.
   const twoFlexTeam: NormalizedTeam = {
     teamId: 9,
     name: 'FlexHeavy',
-    score: 21, // started 10 + 5 + 6
+    score: 10 + 5 + 6,
     players: [
       p('Only QB', 10, 'QB', ['QB']),
       p('Started RB', 5, 'RB/WR/TE', ['RB', 'RB/WR/TE']),
@@ -243,8 +225,9 @@ describe('optimalLineupPoints with two FLEX slots', () => {
   };
 
   it('fills both FLEX slots from the roster without reusing a player', () => {
-    // QB (only eligible = 10) + two best FLEX-eligible (20 + 18) = 48.
-    expect(optimalLineupPoints(twoFlexTeam)).toBeCloseTo(48, 5);
+    const onlyQb = 10;
+    const twoBenchStuds = 20 + 18;
+    expect(optimalLineupPoints(twoFlexTeam)).toBeCloseTo(onlyQb + twoBenchStuds, 5);
   });
 
   it('drives The Sleepwalker off both FLEX spots (48 optimal − 21 actual = 27)', () => {
@@ -274,8 +257,8 @@ describe('optimalLineupPoints with league lineup slots (empty starting slot)', (
   };
 
   it('counts the empty slot as fillable from the bench', () => {
-    // QB 10 + both FLEX spots (12 + 5) = 27, not just 22 from the slots that were used.
-    expect(optimalLineupPoints(emptySlotTeam)).toBeCloseTo(27, 5);
+    const qbPlusBothFlexSpots = 10 + 12 + 5;
+    expect(optimalLineupPoints(emptySlotTeam)).toBeCloseTo(qbPlusBothFlexSpots, 5);
   });
 
   it('falls back to the started slots when the league lineup is unknown', () => {

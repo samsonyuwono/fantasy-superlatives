@@ -13,8 +13,8 @@ const league = (id: string, seasonWeek1Tuesday: string): LeagueConfig => ({
   recipientEmails: ['a@example.com'],
 });
 
-// Week 1's recap goes out Tuesday 2026-09-15, so Week N's goes out 7·(N−1) days later.
-const leagues = [league('main', '2026-09-15')];
+const WEEK_1_RECAP_TUESDAY = '2026-09-15';
+const leagues = [league('main', WEEK_1_RECAP_TUESDAY)];
 const monday = (iso: string) => new Date(`${iso}T16:00:00Z`);
 
 describe('leaguesDueForCheck', () => {

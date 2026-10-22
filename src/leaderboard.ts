@@ -1,8 +1,3 @@
-/**
- * Season-to-date leaderboard ("Hall of Shame"). Pure logic: recomputes every week's awards
- * from the normalized matchups and tallies them. There's no storage in CI, so the caller
- * re-fetches Weeks 1..N from ESPN on each run and passes them all in.
- */
 import { computeAwards, type NormalizedMatchup } from './awards.js';
 
 /**
@@ -39,13 +34,9 @@ export interface WeekMatchups {
 }
 
 export interface SeasonLeaderboard {
-  /** Weeks that were tallied, ascending. Weeks with no scores are left out. */
   weeks: number[];
-  /** Most wins of each award; tied teams are all listed. null until someone reaches MIN_WINS_TO_LEAD. */
   leaders: Record<SeasonAwardKey, { teams: string[]; count: number } | null>;
-  /** Wins of each award by teamId. */
   counts: Record<SeasonAwardKey, Map<number, number>>;
-  /** Each team's name as of the latest week it appears in. Earlier weeks are fetched without names. */
   nameById: Map<number, string>;
 }
 
@@ -63,10 +54,20 @@ export function describeWeeks(weeks: number[]): string {
   return skipped.length ? `${range}, skipping ${skipped.join(', ')}` : range;
 }
 
-/** Tally the awards over the given weeks. Returns undefined when none of them has scores yet. */
+const hasAnyScore = (week: WeekMatchups): boolean =>
+  week.matchups.some((m) => m.home.score !== 0 || m.away.score !== 0);
+
+/**
+ * The season-to-date leaderboard ("Hall of Shame"): recomputes every week's awards and tallies
+ * them. There's no storage in CI, so the caller re-fetches Weeks 1..N from ESPN on each run and
+ * passes them all in, in any order. Weeks with no scores are left out, and it returns undefined
+ * when none has scores yet. Wins are counted by teamId and shown under each team's name from the
+ * latest week it appears in. An award's leader lists every tied team, and is null until someone
+ * reaches MIN_WINS_TO_LEAD.
+ */
 export function buildLeaderboard(weeks: WeekMatchups[]): SeasonLeaderboard | undefined {
   const played = weeks
-    .filter((w) => w.matchups.some((m) => m.home.score !== 0 || m.away.score !== 0))
+    .filter(hasAnyScore)
     .sort((a, b) => a.week - b.week);
   if (played.length === 0) return undefined;
 

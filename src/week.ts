@@ -1,17 +1,9 @@
-/**
- * Season-week math + the Weeks 1–14 gate.
- *
- * The cron fires every Tuesday year-round; the script self-limits by computing which NFL
- * week just completed from a fixed anchor date and refusing to send outside Weeks 1–14.
- */
-
 export const FIRST_WEEK = 1;
 export const LAST_WEEK = 14;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-/** Parse a 'YYYY-MM-DD' date as UTC midnight (avoids local-timezone drift). */
-function utcMidnight(dateStr: string): number {
+function parseDateAsUtcMidnight(dateStr: string): number {
   return Date.parse(`${dateStr}T00:00:00Z`);
 }
 
@@ -23,11 +15,14 @@ function utcMidnight(dateStr: string): number {
  * Returns < 1 before the season starts.
  */
 export function completedWeek(anchorTuesday: string, today: Date): number {
-  const diffDays = (today.getTime() - utcMidnight(anchorTuesday)) / MS_PER_DAY;
-  return Math.round(diffDays / 7) + 1;
+  const daysSinceAnchor = (today.getTime() - parseDateAsUtcMidnight(anchorTuesday)) / MS_PER_DAY;
+  return Math.round(daysSinceAnchor / 7) + 1;
 }
 
-/** True when `week` is within the regular season we recap (Weeks 1–14). */
+/**
+ * True when `week` is within the regular season we recap (Weeks 1–14). The cron fires every
+ * Tuesday year-round, so this gate is what stops sends outside the season.
+ */
 export function isInSeason(week: number): boolean {
   return week >= FIRST_WEEK && week <= LAST_WEEK;
 }

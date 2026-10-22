@@ -1,6 +1,3 @@
-/**
- * Environment helpers shared by the entrypoints (`recap.ts`, `cookie-check.ts`, `guard.ts`).
- */
 import { appendFileSync } from 'node:fs';
 
 /** Read a required environment variable. Throws with its name if it's missing or empty. */

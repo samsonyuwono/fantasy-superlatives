@@ -1,12 +1,3 @@
-/**
- * Monday check: confirm ESPN still accepts each league's cookies before Tuesday's recap, and
- * email OWNER_ALERT_EMAIL once, listing every league that failed.
- *
- * Usage:
- *   tsx src/cookie-check.ts             # check leagues whose next Tuesday is a Weeks 1–14 send
- *   tsx src/cookie-check.ts --force     # check every league, in season or not
- *   tsx src/cookie-check.ts --dry-run   # log the results, and print any alert instead of emailing it
- */
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -27,7 +18,10 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..');
 
-/** Leagues with a recap due on the coming Tuesday (or all of them with `force`). */
+/**
+ * For the Monday check that ESPN still accepts each league's cookies before Tuesday's recap: the
+ * leagues with a Weeks 1–14 recap due on the coming Tuesday, or all of them with `force` (`--force`).
+ */
 export function leaguesDueForCheck(leagues: LeagueConfig[], now: Date, force: boolean): LeagueConfig[] {
   if (force) return leagues;
   return leagues.filter((l) => isInSeason(completedWeek(l.seasonWeek1Tuesday, now)));
@@ -102,7 +96,8 @@ async function main(): Promise<void> {
   process.exitCode = failures.length > 0 ? 1 : 0;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+const isRunDirectly = import.meta.url === `file://${process.argv[1]}`;
+if (isRunDirectly) {
   main().catch((err) => {
     console.error('Cookie check failed:', err instanceof Error ? err.message : err);
     process.exitCode = 1;
