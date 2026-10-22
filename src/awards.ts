@@ -84,7 +84,7 @@ export interface AwardInfo {
 
 const HEARTBREAKER_MAX_MARGIN = 5;
 const MERCY_RULE_MIN_MARGIN = 60;
-const ONE_MAN_ARMY_MIN_SHARE = 0.35;
+const ONE_MAN_ARMY_MIN_PERCENT = 30;
 
 /**
  * Every award's name and emoji, in the order the recap lists them. Keyed by `AwardKey`, so a new
@@ -103,7 +103,7 @@ export const AWARDS: Record<AwardKey, AwardInfo> = {
   oneManArmy: {
     name: 'One-Man Army',
     emoji: '🪖',
-    description: `one starter scored ${ONE_MAN_ARMY_MIN_SHARE * 100}%+ of the team's points`,
+    description: `one starter scored ${ONE_MAN_ARMY_MIN_PERCENT}%+ of a winning team's points`,
     requiredInRoast: false,
   },
 };
@@ -325,9 +325,14 @@ function computeMercyRule(matchups: NormalizedMatchup[]): CloseOrLopsidedResult 
   return biggestWin && biggestWin.margin >= MERCY_RULE_MIN_MARGIN ? biggestWin : undefined;
 }
 
-function computeOneManArmy(teams: NormalizedTeam[]): WeekAwards['oneManArmy'] {
+const winningTeams = (matchups: NormalizedMatchup[]): NormalizedTeam[] =>
+  matchups
+    .filter((matchup) => matchup.home.score !== matchup.away.score)
+    .map((matchup) => (matchup.home.score > matchup.away.score ? matchup.home : matchup.away));
+
+function computeOneManArmy(matchups: NormalizedMatchup[]): WeekAwards['oneManArmy'] {
   let biggestShare: WeekAwards['oneManArmy'];
-  for (const team of teams) {
+  for (const team of winningTeams(matchups)) {
     if (team.score <= 0) continue;
     for (const starter of startersOf(team)) {
       const share = starter.points / team.score;
@@ -336,7 +341,7 @@ function computeOneManArmy(teams: NormalizedTeam[]): WeekAwards['oneManArmy'] {
       }
     }
   }
-  return biggestShare && biggestShare.share >= ONE_MAN_ARMY_MIN_SHARE ? biggestShare : undefined;
+  return biggestShare && biggestShare.share >= ONE_MAN_ARMY_MIN_PERCENT / 100 ? biggestShare : undefined;
 }
 
 /**
@@ -400,6 +405,6 @@ export function computeAwards(matchups: NormalizedMatchup[], week: number): Week
     robbed,
     heartbreaker: computeHeartbreaker(matchups),
     mercyRule: computeMercyRule(matchups),
-    oneManArmy: computeOneManArmy(teams),
+    oneManArmy: computeOneManArmy(matchups),
   };
 }

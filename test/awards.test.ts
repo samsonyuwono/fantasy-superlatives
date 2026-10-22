@@ -306,14 +306,14 @@ describe('bonus awards on the 4-team week', () => {
     expect(awards.mercyRule).toBeUndefined();
   });
 
-  it("gives One-Man Army to Delta, since Dak Prescott's 11 is 42% of their 26", () => {
+  it("gives One-Man Army to Bravo, a winner whose Ja'Marr Chase scored 30 of their 82, not to losing Delta's bigger share", () => {
     expect(awards.oneManArmy).toEqual({
-      team: 'Delta',
-      teamId: 4,
-      player: 'Dak Prescott',
-      points: 11,
-      teamScore: 26,
-      share: 11 / 26,
+      team: 'Bravo',
+      teamId: 2,
+      player: "Ja'Marr Chase",
+      points: 30,
+      teamScore: 82,
+      share: 30 / 82,
     });
   });
 });
@@ -373,27 +373,41 @@ describe('Mercy Rule', () => {
 });
 
 describe('One-Man Army', () => {
-  const week = (home: NormalizedTeam, away: NormalizedTeam) => computeAwards([{ home, away }], 1).oneManArmy;
+  const winnerOver = (winner: NormalizedTeam) => computeAwards([{ home: winner, away: teamScoring(9, winner.score - 10) }], 1).oneManArmy;
 
-  it('counts a share of exactly 35%, and skips 34.9%', () => {
-    expect(week(teamScoring(1, 100, [35, 33, 32]), teamScoring(2, 100, [34, 33, 33]))?.teamId).toBe(1);
-    expect(week(teamScoring(1, 100, [34.9, 33, 32.1]), teamScoring(2, 100, [34, 33, 33]))).toBeUndefined();
+  it('goes only to a team that won, even when a loser had a bigger share', () => {
+    const awards = computeAwards([{ home: teamScoring(1, 100, [60, 40]), away: teamScoring(2, 120, [40, 40, 40]) }], 1);
+    expect(awards.oneManArmy).toMatchObject({ teamId: 2, share: 1 / 3 });
   });
 
-  it('skips a team that scored 0 or less', () => {
-    expect(week(teamScoring(1, 0, [0, 0]), teamScoring(2, -2, [3, -5]))).toBeUndefined();
+  it('never goes to a tie', () => {
+    expect(computeAwards([{ home: teamScoring(1, 100, [50, 50]), away: teamScoring(2, 100, [50, 50]) }], 1).oneManArmy).toBeUndefined();
+  });
+
+  it('counts a share of exactly 30%, and skips 29.9%', () => {
+    expect(winnerOver(teamScoring(1, 100, [30, 30, 30, 10]))?.teamId).toBe(1);
+    expect(winnerOver(teamScoring(1, 100, [29.9, 29.9, 29.9, 10.3]))).toBeUndefined();
+  });
+
+  it('skips a winner that scored 0 or less', () => {
+    expect(computeAwards([{ home: teamScoring(1, -2, [3, -5]), away: teamScoring(2, -5) }], 1).oneManArmy).toBeUndefined();
   });
 
   it('ignores benched players', () => {
-    const benchHero: NormalizedTeam = {
-      ...teamScoring(1, 100, [34, 33, 33]),
-      players: [...teamScoring(1, 100, [34, 33, 33]).players, player('Bench Hero', 60, 'Bench', ['RB'])],
-    };
-    expect(week(benchHero, teamScoring(2, 100, [34, 33, 33]))).toBeUndefined();
+    const evenStarters = teamScoring(1, 100, [25, 25, 25, 25]);
+    const benchHero: NormalizedTeam = { ...evenStarters, players: [...evenStarters.players, player('Bench Hero', 60, 'Bench', ['RB'])] };
+    expect(winnerOver(benchHero)).toBeUndefined();
   });
 
-  it('goes to the first one found when two teams tie on share', () => {
-    expect(week(teamScoring(1, 100, [50, 50]), teamScoring(2, 80, [40, 40]))?.teamId).toBe(1);
+  it('goes to the first one found when two winners tie on share', () => {
+    const awards = computeAwards(
+      [
+        { home: teamScoring(1, 100, [50, 50]), away: teamScoring(2, 90) },
+        { home: teamScoring(3, 70), away: teamScoring(4, 80, [40, 40]) },
+      ],
+      1,
+    );
+    expect(awards.oneManArmy?.teamId).toBe(1);
   });
 
   it('works the same for a 2-FLEX no-kicker lineup and a kicker 1-FLEX lineup', () => {
@@ -421,7 +435,7 @@ describe('One-Man Army', () => {
         player('Rest', 30, 'RB', ['RB', 'RB/WR/TE']),
       ],
     };
-    expect(week(twoFlexNoKicker, teamScoring(3, 100, [30, 35, 35]))).toMatchObject({ player: 'Big Flex', share: 0.4 });
-    expect(week(teamScoring(3, 100, [30, 35, 35]), kickerOneFlex)).toMatchObject({ player: 'Big Kicker', share: 0.4 });
+    expect(winnerOver(twoFlexNoKicker)).toMatchObject({ player: 'Big Flex', share: 0.4 });
+    expect(winnerOver(kickerOneFlex)).toMatchObject({ player: 'Big Kicker', share: 0.4 });
   });
 });

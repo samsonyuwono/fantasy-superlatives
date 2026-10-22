@@ -145,7 +145,7 @@ describe('factSheet', () => {
     expect(sheet).toContain('Bonus awards this week (optional to mention):');
     expect(sheet).toContain('- Heartbreaker (closest loss, 5 pts or less): Alpha lost 97.0–100.0 to Bravo, by 3.0');
     expect(sheet).toContain('- Mercy Rule (biggest blowout, 60+ pts): Charlie beat Jurong FC 150.0–85.0, by 65.0');
-    expect(sheet).toContain("- One-Man Army (one starter scored 35%+ of the team's points): Dak Prescott scored 11.0 of Delta's 26.0 pts (42%)");
+    expect(sheet).toContain("- One-Man Army (one starter scored 30%+ of a winning team's points): Dak Prescott scored 11.0 of Delta's 26.0 pts (42%)");
   });
 
   it('leaves out a bonus award nobody won', () => {

@@ -23,7 +23,7 @@ Bonus awards only appear in a week when someone earns them:
 |---|---|
 | 💔 **Heartbreaker** | Closest loss, if it was by 5 points or less |
 | 🏳️ **Mercy Rule** | Winner of the biggest blowout, if it was by 60 points or more |
-| 🪖 **One-Man Army** | One starter scored 35% or more of their team's points |
+| 🪖 **One-Man Army** | One starter scored 30% or more of a winning team's points |
 
 Below the weekly awards, a **season leaderboard** shows which team has won each award most often so far
 (Baller of the Week and One-Man Army are left out, since they're about one player). The roast can call back to it ("third Corpse this season").
