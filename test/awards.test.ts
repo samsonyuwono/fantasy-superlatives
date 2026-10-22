@@ -185,6 +185,22 @@ describe('matchupOutcome', () => {
     expect(awards.bonehead.matchup).toBeUndefined();
     expect(awards.sleepwalker.matchup).toBeDefined();
   });
+
+  it('gives nobody the Bonehead when every bench player who beat a starter could not have replaced them', () => {
+    const benchQuarterbackOutscoresTheFlex: NormalizedTeam = {
+      teamId: 1,
+      name: 'Careful',
+      score: 30,
+      players: [
+        player('Starting QB', 20, 'QB', ['QB']),
+        player('Starting Flex', 10, 'RB/WR/TE', ['RB', 'RB/WR/TE']),
+        player('Backup QB', 15, 'Bench', ['QB']),
+        player('Bench RB', 4, 'Bench', ['RB', 'RB/WR/TE']),
+      ],
+    };
+    const awards = computeAwards([{ home: benchQuarterbackOutscoresTheFlex, away: { ...benchQuarterbackOutscoresTheFlex, teamId: 2, name: 'Also Careful' } }], 3);
+    expect(awards.bonehead.teamId).toBeUndefined();
+  });
 });
 
 describe('weeks with no decided matchups (e.g. no scores yet)', () => {
@@ -264,5 +280,162 @@ describe('optimalLineupPoints with league lineup slots (empty starting slot)', (
   it('falls back to the started slots when the league lineup is unknown', () => {
     const { lineupSlots: _ignored, ...withoutSlots } = emptySlotTeam;
     expect(optimalLineupPoints(withoutSlots)).toBeCloseTo(22, 5);
+  });
+});
+
+const teamScoring = (teamId: number, score: number, starterPoints: number[] = [score]): NormalizedTeam => ({
+  teamId,
+  name: `Team ${teamId}`,
+  score,
+  players: starterPoints.map((points, index) => player(`Starter ${teamId}.${index + 1}`, points, 'RB', ['RB'])),
+});
+
+const matchupOf = (homeScore: number, awayScore: number, homeId: number, awayId: number): NormalizedMatchup => ({
+  home: teamScoring(homeId, homeScore),
+  away: teamScoring(awayId, awayScore),
+});
+
+describe('bonus awards on the 4-team week', () => {
+  const awards = computeAwards(matchups, 3);
+
+  it('gives no Heartbreaker when the closest loss is by 21', () => {
+    expect(awards.heartbreaker).toBeUndefined();
+  });
+
+  it('gives no Mercy Rule when the biggest win is by 32', () => {
+    expect(awards.mercyRule).toBeUndefined();
+  });
+
+  it("gives One-Man Army to Bravo, a winner whose Ja'Marr Chase scored 30 of their 82, not to losing Delta's bigger share", () => {
+    expect(awards.oneManArmy).toEqual({
+      team: 'Bravo',
+      teamId: 2,
+      player: "Ja'Marr Chase",
+      points: 30,
+      teamScore: 82,
+      share: 30 / 82,
+    });
+  });
+});
+
+describe('Heartbreaker', () => {
+  it('goes to the loser with the smallest margin, up to 5 points', () => {
+    const awards = computeAwards([matchupOf(100, 120, 1, 2), matchupOf(97, 100, 3, 4)], 1);
+    expect(awards.heartbreaker).toEqual({
+      team: 'Team 3',
+      teamId: 3,
+      score: 97,
+      opponent: 'Team 4',
+      opponentScore: 100,
+      margin: 3,
+    });
+  });
+
+  it('counts a margin of exactly 5, even when the subtraction is a floating-point near miss', () => {
+    expect(computeAwards([matchupOf(105.3, 100.3, 1, 2)], 1).heartbreaker?.teamId).toBe(2);
+    expect(computeAwards([matchupOf(100, 105, 1, 2)], 1).heartbreaker?.margin).toBe(5);
+  });
+
+  it('skips a loss by 5.01', () => {
+    expect(computeAwards([matchupOf(100, 105.01, 1, 2)], 1).heartbreaker).toBeUndefined();
+  });
+
+  it('never goes to a tie', () => {
+    expect(computeAwards([matchupOf(100, 100, 1, 2), matchupOf(90, 120, 3, 4)], 1).heartbreaker).toBeUndefined();
+  });
+
+  it('goes to the first one found when two losses tie on margin', () => {
+    expect(computeAwards([matchupOf(98, 100, 1, 2), matchupOf(110, 108, 3, 4)], 1).heartbreaker?.teamId).toBe(1);
+  });
+});
+
+describe('Mercy Rule', () => {
+  it('goes to the winner of the biggest blowout, from 60 points', () => {
+    const awards = computeAwards([matchupOf(150, 85, 1, 2), matchupOf(60, 130, 3, 4)], 1);
+    expect(awards.mercyRule).toEqual({
+      team: 'Team 4',
+      teamId: 4,
+      score: 130,
+      opponent: 'Team 3',
+      opponentScore: 60,
+      margin: 70,
+    });
+  });
+
+  it('counts a margin of exactly 60, and skips 59.99', () => {
+    expect(computeAwards([matchupOf(160.3, 100.3, 1, 2)], 1).mercyRule?.margin).toBe(60);
+    expect(computeAwards([matchupOf(159.99, 100, 1, 2)], 1).mercyRule).toBeUndefined();
+  });
+
+  it('goes to the first one found when two blowouts tie on margin', () => {
+    expect(computeAwards([matchupOf(70, 140, 1, 2), matchupOf(150, 80, 3, 4)], 1).mercyRule?.teamId).toBe(2);
+  });
+});
+
+describe('One-Man Army', () => {
+  const winnerOver = (winner: NormalizedTeam) => computeAwards([{ home: winner, away: teamScoring(9, winner.score - 10) }], 1).oneManArmy;
+
+  it('goes only to a team that won, even when a loser had a bigger share', () => {
+    const awards = computeAwards([{ home: teamScoring(1, 100, [60, 40]), away: teamScoring(2, 120, [40, 40, 40]) }], 1);
+    expect(awards.oneManArmy).toMatchObject({ teamId: 2, share: 1 / 3 });
+  });
+
+  it('never goes to a tie', () => {
+    expect(computeAwards([{ home: teamScoring(1, 100, [50, 50]), away: teamScoring(2, 100, [50, 50]) }], 1).oneManArmy).toBeUndefined();
+  });
+
+  it('counts a share of exactly 30%, and skips 29.9%', () => {
+    expect(winnerOver(teamScoring(1, 100, [30, 30, 30, 10]))?.teamId).toBe(1);
+    expect(winnerOver(teamScoring(1, 100, [29.9, 29.9, 29.9, 10.3]))).toBeUndefined();
+  });
+
+  it('skips a winner that scored 0 or less', () => {
+    expect(computeAwards([{ home: teamScoring(1, -2, [3, -5]), away: teamScoring(2, -5) }], 1).oneManArmy).toBeUndefined();
+  });
+
+  it('ignores benched players', () => {
+    const evenStarters = teamScoring(1, 100, [25, 25, 25, 25]);
+    const benchHero: NormalizedTeam = { ...evenStarters, players: [...evenStarters.players, player('Bench Hero', 60, 'Bench', ['RB'])] };
+    expect(winnerOver(benchHero)).toBeUndefined();
+  });
+
+  it('goes to the first one found when two winners tie on share', () => {
+    const awards = computeAwards(
+      [
+        { home: teamScoring(1, 100, [50, 50]), away: teamScoring(2, 90) },
+        { home: teamScoring(3, 70), away: teamScoring(4, 80, [40, 40]) },
+      ],
+      1,
+    );
+    expect(awards.oneManArmy?.teamId).toBe(1);
+  });
+
+  it('works the same for a 2-FLEX no-kicker lineup and a kicker 1-FLEX lineup', () => {
+    const twoFlexNoKicker: NormalizedTeam = {
+      teamId: 1,
+      name: 'Two Flex',
+      score: 100,
+      lineupSlots: ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'RB/WR/TE', 'RB/WR/TE', 'D/ST'],
+      players: [
+        player('Big Flex', 40, 'RB/WR/TE', ['RB', 'RB/WR/TE']),
+        player('Other Flex', 10, 'RB/WR/TE', ['WR', 'RB/WR/TE']),
+        player('Quarterback', 20, 'QB', ['QB']),
+        player('Rest', 30, 'RB', ['RB', 'RB/WR/TE']),
+      ],
+    };
+    const kickerOneFlex: NormalizedTeam = {
+      teamId: 2,
+      name: 'Kicker',
+      score: 100,
+      lineupSlots: ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'RB/WR/TE', 'D/ST', 'K'],
+      players: [
+        player('Big Kicker', 40, 'K', ['K']),
+        player('Flex', 10, 'RB/WR/TE', ['WR', 'RB/WR/TE']),
+        player('Quarterback', 20, 'QB', ['QB']),
+        player('Rest', 30, 'RB', ['RB', 'RB/WR/TE']),
+      ],
+    };
+    expect(winnerOver(twoFlexNoKicker)).toMatchObject({ player: 'Big Flex', share: 0.4 });
+    expect(winnerOver(kickerOneFlex)).toMatchObject({ player: 'Big Kicker', share: 0.4 });
   });
 });
