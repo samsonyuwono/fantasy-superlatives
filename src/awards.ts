@@ -111,6 +111,9 @@ export const AWARDS: Record<AwardKey, AwardInfo> = {
 const BENCH = 'Bench';
 const IR = 'IR';
 
+/** A 0–1 share as a whole percent, e.g. 0.353 reads "35%". */
+export const wholePercent = (share: number) => `${Math.round(share * 100)}%`;
+
 /** How a lineup slot reads in the recap. ESPN calls the FLEX slot 'RB/WR/TE'; the league calls it Flex. */
 export function slotLabel(slot: string): string {
   return slot === 'RB/WR/TE' ? 'Flex' : slot;

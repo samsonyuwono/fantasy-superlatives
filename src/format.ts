@@ -1,4 +1,4 @@
-import { AWARDS, NOBODY_BLUNDERED_REASON, slotLabel, type AwardKey, type WeekAwards } from './awards.js';
+import { AWARDS, NOBODY_BLUNDERED_REASON, slotLabel, wholePercent, type AwardKey, type WeekAwards } from './awards.js';
 import { describeWeeks, SEASON_AWARD_KEYS, type SeasonLeaderboard } from './leaderboard.js';
 
 const oneDecimal = (points: number) => points.toFixed(1);
@@ -22,8 +22,6 @@ export function formatLeaderboard(leaderboard: SeasonLeaderboard): string[] {
   }
   return lines;
 }
-
-const wholePercent = (share: number) => `${Math.round(share * 100)}%`;
 
 function bonusAwardLines({ heartbreaker, mercyRule, oneManArmy }: WeekAwards): string[] {
   const lines: string[] = [];

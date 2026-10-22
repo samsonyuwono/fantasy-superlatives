@@ -3,6 +3,7 @@ import {
   AWARDS,
   NOBODY_BLUNDERED_REASON,
   slotLabel,
+  wholePercent,
   type AllPlayRecord,
   type AwardKey,
   type MatchupOutcome,
@@ -91,8 +92,6 @@ export function factSheet(awards: WeekAwards, leaderboard?: SeasonLeaderboard): 
   if (leaderboard) lines.push('', ...seasonFacts(awards, leaderboard));
   return lines.join('\n');
 }
-
-const wholePercent = (share: number) => `${Math.round(share * 100)}%`;
 
 function bonusAwardFacts({ heartbreaker, mercyRule, oneManArmy }: WeekAwards): string[] {
   const facts: string[] = [];
