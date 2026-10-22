@@ -27,4 +27,4 @@ Personal project. Every Tuesday it emails a recap of the past NFL week for each 
 - Never commit or push without my explicit OK for that specific change. `main` is live, since the Tuesday run uses it.
 - Use Conventional Commits with a meaningful scope or none, e.g. `ci(schedule): ...`.
 - Use the `gh` CLI for GitHub.
-- Code should explain itself through its names and structure, without comments. If something isn't clear from the code, rename the variable or function until it is. Only exported functions and variables get JSDoc; types and interfaces don't, even when exported.
+- Code should explain itself through its names and structure, without comments. If something isn't clear from the code, rename the variable or function until it is. Name variables, functions and parameters with full words, never abbreviations or single letters (`player`, not `pl` or `p`; `config`, not `cfg`; `error`, not `err`). The exceptions are loop indexes like `i`, generic type parameters like `T`, and names set by Node or ESPN (`__dirname`, `swid`). Only exported functions and variables get JSDoc; types and interfaces don't, even when exported.
