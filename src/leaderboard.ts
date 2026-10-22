@@ -20,15 +20,6 @@ export const SEASON_AWARD_KEYS = [
 
 export type SeasonAwardKey = (typeof SEASON_AWARD_KEYS)[number];
 
-export const SEASON_AWARD_NAMES: Record<SeasonAwardKey, string> = {
-  juggernaut: 'The Juggernaut',
-  corpse: 'The Corpse',
-  sleepwalker: 'The Sleepwalker',
-  bonehead: 'The Bonehead',
-  backedIntoIt: 'Backed Into It',
-  robbed: 'Robbed',
-};
-
 /**
  * Wins an award needs before it has a season leader, since early on one win each is just noise.
  * The Juggernaut always shows, even as a tie at one win.

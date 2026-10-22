@@ -83,6 +83,29 @@ export interface WeekAwards {
   robbed: { team: string; teamId?: number; score: number; allPlayWinPct: number; allPlay: AllPlayRecord };
 }
 
+export type AwardKey = Exclude<keyof WeekAwards, 'week' | 'results'>;
+
+export interface AwardInfo {
+  name: string;
+  emoji: string;
+  description: string;
+  requiredInRoast: boolean;
+}
+
+/**
+ * Every award's name and emoji, in the order the recap lists them. Keyed by `AwardKey`, so a new
+ * award in `WeekAwards` doesn't compile until it has an entry here.
+ */
+export const AWARDS: Record<AwardKey, AwardInfo> = {
+  juggernaut: { name: 'The Juggernaut', emoji: '💪', description: 'highest team score', requiredInRoast: true },
+  corpse: { name: 'The Corpse', emoji: '💀', description: 'lowest team score', requiredInRoast: true },
+  ballerOfTheWeek: { name: 'Baller of the Week', emoji: '⭐', description: 'top individual starter', requiredInRoast: true },
+  sleepwalker: { name: 'The Sleepwalker', emoji: '😴', description: 'most points left on the bench', requiredInRoast: true },
+  bonehead: { name: 'The Bonehead', emoji: '🤡', description: 'worst start/sit', requiredInRoast: true },
+  backedIntoIt: { name: 'Backed Into It', emoji: '🍀', description: 'luckiest win', requiredInRoast: true },
+  robbed: { name: 'Robbed', emoji: '😤', description: 'unluckiest loss', requiredInRoast: true },
+};
+
 const BENCH = 'Bench';
 const IR = 'IR';
 

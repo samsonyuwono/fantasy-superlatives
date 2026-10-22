@@ -2,9 +2,11 @@
  * Deterministic checks on a roast draft, run before the Claude checker. It's free, and it can't be
  * talked out of a wrong number.
  */
-import { SEASON_AWARD_NAMES } from './leaderboard.js';
+import { AWARDS } from './awards.js';
 
-const AWARD_NAMES = [...Object.values(SEASON_AWARD_NAMES), 'Baller of the Week'];
+const AWARD_NAMES = Object.values(AWARDS)
+  .filter((award) => award.requiredInRoast)
+  .map((award) => award.name);
 // Matched in title case as whole words, so the verb "robbed" doesn't count as the Robbed award.
 // A leading "The" is optional: "this week's Juggernaut" names The Juggernaut.
 const AWARD_PATTERNS = AWARD_NAMES.map((name) => ({ name, pattern: new RegExp(`\\b${name.replace(/^The /, '')}\\b`) }));

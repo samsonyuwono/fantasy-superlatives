@@ -3,8 +3,8 @@
  * awards, then the season leaderboard when there is one. Plain text so it pastes straight
  * into WhatsApp.
  */
-import { slotLabel, type WeekAwards } from './awards.js';
-import { describeWeeks, SEASON_AWARD_KEYS, SEASON_AWARD_NAMES, type SeasonAwardKey, type SeasonLeaderboard } from './leaderboard.js';
+import { AWARDS, slotLabel, type AwardKey, type WeekAwards } from './awards.js';
+import { describeWeeks, SEASON_AWARD_KEYS, type SeasonLeaderboard } from './leaderboard.js';
 
 const n = (x: number) => x.toFixed(1);
 
@@ -13,14 +13,7 @@ export function formatSubject(week: number, leagueName: string): string {
   return `🏈 ${leagueName} — Week ${week} Superlatives`;
 }
 
-const AWARD_EMOJI: Record<SeasonAwardKey, string> = {
-  juggernaut: '💪',
-  corpse: '💀',
-  sleepwalker: '😴',
-  bonehead: '🤡',
-  backedIntoIt: '🍀',
-  robbed: '😤',
-};
+const awardLine = (key: AwardKey, detail: string) => `${AWARDS[key].emoji} ${AWARDS[key].name} — ${detail}`;
 
 const DIVIDER = '━━━━━━━━━━━━━━━━━━━━━━';
 
@@ -30,7 +23,7 @@ export function formatLeaderboard(lb: SeasonLeaderboard): string[] {
   for (const key of SEASON_AWARD_KEYS) {
     const leader = lb.leaders[key];
     if (!leader) continue;
-    lines.push(`${AWARD_EMOJI[key]} ${SEASON_AWARD_NAMES[key]} — ${leader.teams.join(', ')} ×${leader.count}`);
+    lines.push(awardLine(key, `${leader.teams.join(', ')} ×${leader.count}`));
   }
   return lines;
 }
@@ -45,15 +38,18 @@ export function formatEmailBody(awards: WeekAwards, roast: string, leaderboard?:
   lines.push(DIVIDER);
   lines.push(`🏆 WEEK ${a.week} AWARDS`);
   lines.push(DIVIDER);
-  lines.push(`💪 The Juggernaut — ${a.juggernaut.team} (${n(a.juggernaut.score)})`);
-  lines.push(`💀 The Corpse — ${a.corpse.team} (${n(a.corpse.score)})`);
-  lines.push(`⭐ Baller of the Week — ${a.ballerOfTheWeek.player}, ${a.ballerOfTheWeek.team} (${n(a.ballerOfTheWeek.points)})`);
-  lines.push(`😴 The Sleepwalker — ${a.sleepwalker.team} left ${n(a.sleepwalker.pointsLeft)} on the bench`);
+  lines.push(awardLine('juggernaut', `${a.juggernaut.team} (${n(a.juggernaut.score)})`));
+  lines.push(awardLine('corpse', `${a.corpse.team} (${n(a.corpse.score)})`));
+  lines.push(awardLine('ballerOfTheWeek', `${a.ballerOfTheWeek.player}, ${a.ballerOfTheWeek.team} (${n(a.ballerOfTheWeek.points)})`));
+  lines.push(awardLine('sleepwalker', `${a.sleepwalker.team} left ${n(a.sleepwalker.pointsLeft)} on the bench`));
   lines.push(
-    `🤡 The Bonehead — ${a.bonehead.team}: started ${a.bonehead.started} (${n(a.bonehead.startedPoints)}) over ${a.bonehead.benched} (${n(a.bonehead.benchedPoints)}) at ${slotLabel(a.bonehead.slot)}`,
+    awardLine(
+      'bonehead',
+      `${a.bonehead.team}: started ${a.bonehead.started} (${n(a.bonehead.startedPoints)}) over ${a.bonehead.benched} (${n(a.bonehead.benchedPoints)}) at ${slotLabel(a.bonehead.slot)}`,
+    ),
   );
-  lines.push(`🍀 Backed Into It — ${a.backedIntoIt.team} won with ${n(a.backedIntoIt.score)}`);
-  lines.push(`😤 Robbed — ${a.robbed.team} lost with ${n(a.robbed.score)}`);
+  lines.push(awardLine('backedIntoIt', `${a.backedIntoIt.team} won with ${n(a.backedIntoIt.score)}`));
+  lines.push(awardLine('robbed', `${a.robbed.team} lost with ${n(a.robbed.score)}`));
 
   if (leaderboard) {
     lines.push('');
