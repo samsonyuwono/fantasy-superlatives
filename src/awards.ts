@@ -222,6 +222,9 @@ function computeBonehead(teams: NormalizedTeam[]): WeekAwards['bonehead'] {
   return worstSwap ?? nobodyBlundered();
 }
 
+/** Why nobody gets The Bonehead in a week when `computeBonehead` finds no swap that would have helped. */
+export const NOBODY_BLUNDERED_REASON = 'no bench player outscored a starter they could have replaced';
+
 function nobodyBlundered(): WeekAwards['bonehead'] {
   return {
     team: '',

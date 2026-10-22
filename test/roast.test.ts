@@ -108,6 +108,12 @@ describe('factSheet', () => {
     expect(sheet).toContain('- Robbed (unluckiest loss): nobody, since every matchup this week was a tie');
   });
 
+  it('says nobody is the Bonehead when no bench player outscored a starter they could have replaced', () => {
+    const sheet = factSheet(awards);
+    expect(sheet).toContain('- The Bonehead (worst start/sit): nobody, since no bench player outscored a starter they could have replaced');
+    expect(sheet).not.toContain('benched  (0.0)');
+  });
+
   it('has no season section without a leaderboard', () => {
     expect(factSheet(awards)).not.toContain('Season so far');
   });

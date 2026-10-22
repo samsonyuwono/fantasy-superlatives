@@ -96,6 +96,13 @@ describe('formatEmailBody', () => {
     expect(body).not.toContain('RB/WR/TE');
   });
 
+  it('says nobody is the Bonehead when no bench player outscored a starter they could have replaced', () => {
+    const nobodyBlundered = { team: '', benched: '', benchedPoints: 0, started: '', startedPoints: 0, slot: '', regret: 0 };
+    const body = formatEmailBody({ ...awards, bonehead: nobodyBlundered }, 'roast');
+    expect(body).toContain('🤡 The Bonehead — nobody: no bench player outscored a starter they could have replaced');
+    expect(body).not.toContain('started  (0.0)');
+  });
+
   const bonusAwards: Pick<WeekAwards, 'heartbreaker' | 'mercyRule' | 'oneManArmy'> = {
     heartbreaker: { team: 'Alpha', teamId: 1, score: 97, opponent: 'Bravo', opponentScore: 100, margin: 3 },
     mercyRule: { team: 'Charlie', teamId: 5, score: 150, opponent: 'Jurong FC', opponentScore: 85, margin: 65 },

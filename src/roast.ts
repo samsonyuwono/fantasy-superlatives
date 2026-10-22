@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import {
   AWARDS,
+  NOBODY_BLUNDERED_REASON,
   slotLabel,
   type AllPlayRecord,
   type AwardKey,
@@ -65,7 +66,12 @@ export function factSheet(awards: WeekAwards, leaderboard?: SeasonLeaderboard): 
     awardFact('corpse', `${awards.corpse.team} — ${formatPoints(awards.corpse.score)} pts`),
     awardFact('ballerOfTheWeek', `${awards.ballerOfTheWeek.player} on ${awards.ballerOfTheWeek.team} — ${formatPoints(awards.ballerOfTheWeek.points)} pts`),
     awardFact('sleepwalker', `${awards.sleepwalker.team} — left ${formatPoints(awards.sleepwalker.pointsLeft)} pts on the bench (started ${formatPoints(awards.sleepwalker.actual)}, optimal was ${formatPoints(awards.sleepwalker.optimal)}).${outcomeText(awards.sleepwalker.team, awards.sleepwalker.matchup, SLEEPWALKER_MISTAKE)}`),
-    awardFact('bonehead', `${awards.bonehead.team} benched ${awards.bonehead.benched} (${formatPoints(awards.bonehead.benchedPoints)}) and started ${awards.bonehead.started} (${formatPoints(awards.bonehead.startedPoints)}) at ${slotLabel(awards.bonehead.slot)} — a ${formatPoints(awards.bonehead.regret)}-pt blunder.${outcomeText(awards.bonehead.team, awards.bonehead.matchup, BONEHEAD_MISTAKE)}`),
+    awardFact(
+      'bonehead',
+      awards.bonehead.teamId === undefined
+        ? `nobody, since ${NOBODY_BLUNDERED_REASON}`
+        : `${awards.bonehead.team} benched ${awards.bonehead.benched} (${formatPoints(awards.bonehead.benchedPoints)}) and started ${awards.bonehead.started} (${formatPoints(awards.bonehead.startedPoints)}) at ${slotLabel(awards.bonehead.slot)} — a ${formatPoints(awards.bonehead.regret)}-pt blunder.${outcomeText(awards.bonehead.team, awards.bonehead.matchup, BONEHEAD_MISTAKE)}`,
+    ),
     awardFact(
       'backedIntoIt',
       awards.backedIntoIt.teamId === undefined

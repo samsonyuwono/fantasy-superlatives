@@ -1,4 +1,4 @@
-import { AWARDS, slotLabel, type AwardKey, type WeekAwards } from './awards.js';
+import { AWARDS, NOBODY_BLUNDERED_REASON, slotLabel, type AwardKey, type WeekAwards } from './awards.js';
 import { describeWeeks, SEASON_AWARD_KEYS, type SeasonLeaderboard } from './leaderboard.js';
 
 const oneDecimal = (points: number) => points.toFixed(1);
@@ -56,7 +56,9 @@ export function formatEmailBody(awards: WeekAwards, roast: string, leaderboard?:
   lines.push(
     awardLine(
       'bonehead',
-      `${awards.bonehead.team}: started ${awards.bonehead.started} (${oneDecimal(awards.bonehead.startedPoints)}) over ${awards.bonehead.benched} (${oneDecimal(awards.bonehead.benchedPoints)}) at ${slotLabel(awards.bonehead.slot)}`,
+      awards.bonehead.teamId === undefined
+        ? `nobody: ${NOBODY_BLUNDERED_REASON}`
+        : `${awards.bonehead.team}: started ${awards.bonehead.started} (${oneDecimal(awards.bonehead.startedPoints)}) over ${awards.bonehead.benched} (${oneDecimal(awards.bonehead.benchedPoints)}) at ${slotLabel(awards.bonehead.slot)}`,
     ),
   );
   lines.push(awardLine('backedIntoIt', `${awards.backedIntoIt.team} won with ${oneDecimal(awards.backedIntoIt.score)}`));

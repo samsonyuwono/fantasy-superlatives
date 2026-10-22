@@ -185,6 +185,22 @@ describe('matchupOutcome', () => {
     expect(awards.bonehead.matchup).toBeUndefined();
     expect(awards.sleepwalker.matchup).toBeDefined();
   });
+
+  it('gives nobody the Bonehead when every bench player who beat a starter could not have replaced them', () => {
+    const benchQuarterbackOutscoresTheFlex: NormalizedTeam = {
+      teamId: 1,
+      name: 'Careful',
+      score: 30,
+      players: [
+        player('Starting QB', 20, 'QB', ['QB']),
+        player('Starting Flex', 10, 'RB/WR/TE', ['RB', 'RB/WR/TE']),
+        player('Backup QB', 15, 'Bench', ['QB']),
+        player('Bench RB', 4, 'Bench', ['RB', 'RB/WR/TE']),
+      ],
+    };
+    const awards = computeAwards([{ home: benchQuarterbackOutscoresTheFlex, away: { ...benchQuarterbackOutscoresTheFlex, teamId: 2, name: 'Also Careful' } }], 3);
+    expect(awards.bonehead.teamId).toBeUndefined();
+  });
 });
 
 describe('weeks with no decided matchups (e.g. no scores yet)', () => {
