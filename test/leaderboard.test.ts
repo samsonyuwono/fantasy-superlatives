@@ -153,3 +153,33 @@ describe('buildLeaderboard across lineup shapes', () => {
     expect(leaderboard.leaders.sleepwalker).toEqual({ teams: ['Forgetful'], count: 2 });
   });
 });
+
+describe('buildLeaderboard with bonus awards', () => {
+  const closeLossAndBlowout = (weekNumber: number) =>
+    week(weekNumber, [
+      { home: qbAndFlexTeam(1, 'A', 50, 48), away: qbAndFlexTeam(2, 'B', 50, 50) },
+      { home: qbAndFlexTeam(3, 'C', 50, 50), away: qbAndFlexTeam(4, 'D', 20, 10) },
+    ]);
+  const noBonusAwards = week(3, [
+    { home: qbAndFlexTeam(1, 'A', 50, 30), away: qbAndFlexTeam(2, 'B', 50, 50) },
+    { home: qbAndFlexTeam(3, 'C', 50, 50), away: qbAndFlexTeam(4, 'D', 40, 40) },
+  ]);
+
+  it('counts Heartbreaker and Mercy Rule wins, with a leader from two wins', () => {
+    const leaderboard = buildLeaderboard([closeLossAndBlowout(1), closeLossAndBlowout(2)])!;
+    expect(leaderboard.leaders.heartbreaker).toEqual({ teams: ['A'], count: 2 });
+    expect(leaderboard.leaders.mercyRule).toEqual({ teams: ['C'], count: 2 });
+  });
+
+  it('has no leader after one win', () => {
+    const leaderboard = buildLeaderboard([closeLossAndBlowout(1)])!;
+    expect(leaderboard.leaders.heartbreaker).toBeNull();
+    expect(leaderboard.winsByTeamId.heartbreaker.get(1)).toBe(1);
+  });
+
+  it('skips a week where nobody won them', () => {
+    const leaderboard = buildLeaderboard([closeLossAndBlowout(1), noBonusAwards])!;
+    expect(leaderboard.winsByTeamId.heartbreaker.get(1)).toBe(1);
+    expect(leaderboard.winsByTeamId.mercyRule.get(3)).toBe(1);
+  });
+});

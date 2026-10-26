@@ -1,8 +1,8 @@
 import { computeAwards, type NormalizedMatchup } from './awards.js';
 
 /**
- * The team awards tallied over the season. Baller of the Week is left out: it's about one
- * player's big game, not something a team keeps winning.
+ * The team awards tallied over the season. Baller of the Week and One-Man Army are left out:
+ * they're about one player's big game, not something a team keeps winning.
  */
 export const SEASON_AWARD_KEYS = [
   'juggernaut',
@@ -11,6 +11,8 @@ export const SEASON_AWARD_KEYS = [
   'bonehead',
   'backedIntoIt',
   'robbed',
+  'heartbreaker',
+  'mercyRule',
 ] as const;
 
 export type SeasonAwardKey = (typeof SEASON_AWARD_KEYS)[number];
@@ -26,6 +28,8 @@ export const MIN_WINS_TO_LEAD: Record<SeasonAwardKey, number> = {
   bonehead: 2,
   backedIntoIt: 2,
   robbed: 2,
+  heartbreaker: 2,
+  mercyRule: 2,
 };
 
 export interface WeekMatchups {
@@ -83,7 +87,7 @@ export function buildLeaderboard(weeks: WeekMatchups[]): SeasonLeaderboard | und
     }
     const awards = computeAwards(matchups, week);
     for (const key of SEASON_AWARD_KEYS) {
-      const teamId = awards[key].teamId;
+      const teamId = awards[key]?.teamId;
       if (teamId === undefined) continue;
       winsByTeamId[key].set(teamId, (winsByTeamId[key].get(teamId) ?? 0) + 1);
     }

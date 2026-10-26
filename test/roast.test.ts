@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, type Mocked } from 'vitest';
 import { factSheet, generateRoast, MAX_ATTEMPTS, parsePipelineMode, runPipeline, type RoastDependencies } from '../src/roast.js';
 import type { Agents, Verdict } from '../src/agents.js';
+import { verifyDraft } from '../src/factcheck.js';
 import type { WeekAwards } from '../src/awards.js';
 import type { SeasonLeaderboard } from '../src/leaderboard.js';
 
@@ -32,6 +33,8 @@ const leaderboard: SeasonLeaderboard = {
     bonehead: null,
     backedIntoIt: null,
     robbed: { teams: ['Alpha', 'Bravo'], count: 2 },
+    heartbreaker: null,
+    mercyRule: null,
   },
   winsByTeamId: {
     juggernaut: new Map([[2, 1], [6, 2]]),
@@ -40,6 +43,8 @@ const leaderboard: SeasonLeaderboard = {
     bonehead: new Map(),
     backedIntoIt: new Map([[5, 1]]),
     robbed: new Map([[1, 2], [2, 2]]),
+    heartbreaker: new Map(),
+    mercyRule: new Map(),
   },
   latestNameByTeamId: new Map(),
 };
@@ -103,6 +108,12 @@ describe('factSheet', () => {
     expect(sheet).toContain('- Robbed (unluckiest loss): nobody, since every matchup this week was a tie');
   });
 
+  it('says nobody is the Bonehead when no bench player outscored a starter they could have replaced', () => {
+    const sheet = factSheet(awards);
+    expect(sheet).toContain('- The Bonehead (worst start/sit): nobody, since no bench player outscored a starter they could have replaced');
+    expect(sheet).not.toContain('benched  (0.0)');
+  });
+
   it('has no season section without a leaderboard', () => {
     expect(factSheet(awards)).not.toContain('Season so far');
   });
@@ -121,6 +132,48 @@ describe('factSheet', () => {
     expect(sheet).not.toContain('Season leader for Baller of the Week');
     expect(sheet).not.toContain('Season leader for The Sleepwalker');
     expect(sheet).not.toContain('Season leader for The Bonehead');
+  });
+
+  const bonusAwards: Pick<WeekAwards, 'heartbreaker' | 'mercyRule' | 'oneManArmy'> = {
+    heartbreaker: { team: 'Alpha', teamId: 1, score: 97, opponent: 'Bravo', opponentScore: 100, margin: 3 },
+    mercyRule: { team: 'Charlie', teamId: 5, score: 150, opponent: 'Jurong FC', opponentScore: 85, margin: 65 },
+    oneManArmy: { team: 'Delta', teamId: 3, player: 'Dak Prescott', points: 11, teamScore: 26, share: 11 / 26 },
+  };
+
+  it('lists the bonus awards someone won under their own heading', () => {
+    const sheet = factSheet({ ...awards, ...bonusAwards });
+    expect(sheet).toContain('Bonus awards this week (optional to mention):');
+    expect(sheet).toContain('- Heartbreaker (closest loss, 5 pts or less): Alpha lost 97.0–100.0 to Bravo, by 3.0');
+    expect(sheet).toContain('- Mercy Rule (biggest blowout, 60+ pts): Charlie beat Jurong FC 150.0–85.0, by 65.0');
+    expect(sheet).toContain("- One-Man Army (one starter scored 30%+ of a winning team's points): Dak Prescott scored 11.0 of Delta's 26.0 pts (42%)");
+  });
+
+  it('leaves out a bonus award nobody won', () => {
+    const sheet = factSheet({ ...awards, heartbreaker: bonusAwards.heartbreaker });
+    expect(sheet).toContain('Heartbreaker');
+    expect(sheet).not.toContain('Mercy Rule');
+    expect(sheet).not.toContain('One-Man Army');
+  });
+
+  it('has no bonus heading when nobody won a bonus award', () => {
+    expect(factSheet(awards)).not.toContain('Bonus awards');
+  });
+
+  it('calls out a repeat Heartbreaker, and skips the season check for a bonus award nobody won this week', () => {
+    const repeatHeartbreak = {
+      ...leaderboard,
+      winsByTeamId: { ...leaderboard.winsByTeamId, heartbreaker: new Map([[1, 2]]) },
+      leaders: { ...leaderboard.leaders, heartbreaker: { teams: ['Alpha'], count: 2 } },
+    };
+    const sheet = factSheet({ ...awards, heartbreaker: bonusAwards.heartbreaker }, repeatHeartbreak);
+    expect(sheet).toContain('Alpha has now won Heartbreaker 2 times this season');
+    expect(sheet).toContain('Season leader for Heartbreaker: Alpha with 2');
+  });
+
+  it('passes the code check without mentioning any bonus award, and with the One-Man Army percentage', () => {
+    const sheet = factSheet({ ...awards, ...bonusAwards });
+    expect(verifyDraft(`Bravo dropped 120.0! ${AWARD_NAMES}.`, sheet)).toEqual([]);
+    expect(verifyDraft(`Dak Prescott was 42% of Delta. ${AWARD_NAMES}.`, sheet)).toEqual([]);
   });
 });
 

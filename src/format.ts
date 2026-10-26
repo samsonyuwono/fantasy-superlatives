@@ -1,4 +1,4 @@
-import { AWARDS, slotLabel, type AwardKey, type WeekAwards } from './awards.js';
+import { AWARDS, NOBODY_BLUNDERED_REASON, slotLabel, wholePercent, type AwardKey, type WeekAwards } from './awards.js';
 import { describeWeeks, SEASON_AWARD_KEYS, type SeasonLeaderboard } from './leaderboard.js';
 
 const oneDecimal = (points: number) => points.toFixed(1);
@@ -23,6 +23,18 @@ export function formatLeaderboard(leaderboard: SeasonLeaderboard): string[] {
   return lines;
 }
 
+function bonusAwardLines({ heartbreaker, mercyRule, oneManArmy }: WeekAwards): string[] {
+  const lines: string[] = [];
+  if (heartbreaker) lines.push(awardLine('heartbreaker', `${heartbreaker.team} lost to ${heartbreaker.opponent} by ${oneDecimal(heartbreaker.margin)}`));
+  if (mercyRule) lines.push(awardLine('mercyRule', `${mercyRule.team} beat ${mercyRule.opponent} by ${oneDecimal(mercyRule.margin)}`));
+  if (oneManArmy) {
+    lines.push(
+      awardLine('oneManArmy', `${oneManArmy.player} scored ${oneDecimal(oneManArmy.points)} of ${oneManArmy.team}'s ${oneDecimal(oneManArmy.teamScore)} (${wholePercent(oneManArmy.share)})`),
+    );
+  }
+  return lines;
+}
+
 /**
  * The full email: the roast, this week's awards, then the season leaderboard when there is one.
  * Plain text so it pastes straight into WhatsApp.
@@ -42,11 +54,14 @@ export function formatEmailBody(awards: WeekAwards, roast: string, leaderboard?:
   lines.push(
     awardLine(
       'bonehead',
-      `${awards.bonehead.team}: started ${awards.bonehead.started} (${oneDecimal(awards.bonehead.startedPoints)}) over ${awards.bonehead.benched} (${oneDecimal(awards.bonehead.benchedPoints)}) at ${slotLabel(awards.bonehead.slot)}`,
+      awards.bonehead.teamId === undefined
+        ? `nobody: ${NOBODY_BLUNDERED_REASON}`
+        : `${awards.bonehead.team}: started ${awards.bonehead.started} (${oneDecimal(awards.bonehead.startedPoints)}) over ${awards.bonehead.benched} (${oneDecimal(awards.bonehead.benchedPoints)}) at ${slotLabel(awards.bonehead.slot)}`,
     ),
   );
   lines.push(awardLine('backedIntoIt', `${awards.backedIntoIt.team} won with ${oneDecimal(awards.backedIntoIt.score)}`));
   lines.push(awardLine('robbed', `${awards.robbed.team} lost with ${oneDecimal(awards.robbed.score)}`));
+  lines.push(...bonusAwardLines(awards));
 
   if (leaderboard) {
     lines.push('');

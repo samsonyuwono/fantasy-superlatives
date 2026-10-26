@@ -59,6 +59,18 @@ export interface WeekAwards {
   };
   backedIntoIt: { team: string; teamId?: number; score: number; allPlayWinPercentage: number; allPlay: AllPlayRecord };
   robbed: { team: string; teamId?: number; score: number; allPlayWinPercentage: number; allPlay: AllPlayRecord };
+  heartbreaker?: CloseOrLopsidedResult;
+  mercyRule?: CloseOrLopsidedResult;
+  oneManArmy?: { team: string; teamId: number; player: string; points: number; teamScore: number; share: number };
+}
+
+export interface CloseOrLopsidedResult {
+  team: string;
+  teamId: number;
+  score: number;
+  opponent: string;
+  opponentScore: number;
+  margin: number;
 }
 
 export type AwardKey = Exclude<keyof WeekAwards, 'week' | 'results'>;
@@ -69,6 +81,10 @@ export interface AwardInfo {
   description: string;
   requiredInRoast: boolean;
 }
+
+const HEARTBREAKER_MAX_MARGIN = 5;
+const MERCY_RULE_MIN_MARGIN = 60;
+const ONE_MAN_ARMY_MIN_PERCENT = 30;
 
 /**
  * Every award's name and emoji, in the order the recap lists them. Keyed by `AwardKey`, so a new
@@ -82,10 +98,21 @@ export const AWARDS: Record<AwardKey, AwardInfo> = {
   bonehead: { name: 'The Bonehead', emoji: '🤡', description: 'worst start/sit', requiredInRoast: true },
   backedIntoIt: { name: 'Backed Into It', emoji: '🍀', description: 'luckiest win', requiredInRoast: true },
   robbed: { name: 'Robbed', emoji: '😤', description: 'unluckiest loss', requiredInRoast: true },
+  heartbreaker: { name: 'Heartbreaker', emoji: '💔', description: `closest loss, ${HEARTBREAKER_MAX_MARGIN} pts or less`, requiredInRoast: false },
+  mercyRule: { name: 'Mercy Rule', emoji: '🏳️', description: `biggest blowout, ${MERCY_RULE_MIN_MARGIN}+ pts`, requiredInRoast: false },
+  oneManArmy: {
+    name: 'One-Man Army',
+    emoji: '🪖',
+    description: `one starter scored ${ONE_MAN_ARMY_MIN_PERCENT}%+ of a winning team's points`,
+    requiredInRoast: false,
+  },
 };
 
 const BENCH = 'Bench';
 const IR = 'IR';
+
+/** A 0–1 share as a whole percent, e.g. 0.353 reads "35%". */
+export const wholePercent = (share: number) => `${Math.round(share * 100)}%`;
 
 /** How a lineup slot reads in the recap. ESPN calls the FLEX slot 'RB/WR/TE'; the league calls it Flex. */
 export function slotLabel(slot: string): string {
@@ -198,6 +225,9 @@ function computeBonehead(teams: NormalizedTeam[]): WeekAwards['bonehead'] {
   return worstSwap ?? nobodyBlundered();
 }
 
+/** Why nobody gets The Bonehead in a week when `computeBonehead` finds no swap that would have helped. */
+export const NOBODY_BLUNDERED_REASON = 'no bench player outscored a starter they could have replaced';
+
 function nobodyBlundered(): WeekAwards['bonehead'] {
   return {
     team: '',
@@ -262,6 +292,61 @@ function computeLuck(
   return { backedIntoIt: luckiestWinner, robbed: unluckiestLoser };
 }
 
+const roundedToHundredths = (points: number) => Math.round(points * 100) / 100;
+
+function decidedResults(matchups: NormalizedMatchup[], viewpoint: 'winner' | 'loser'): CloseOrLopsidedResult[] {
+  const results: CloseOrLopsidedResult[] = [];
+  for (const matchup of matchups) {
+    if (matchup.home.score === matchup.away.score) continue;
+    const [winner, loser] = matchup.home.score > matchup.away.score ? [matchup.home, matchup.away] : [matchup.away, matchup.home];
+    const [team, opponent] = viewpoint === 'winner' ? [winner, loser] : [loser, winner];
+    results.push({
+      team: team.name,
+      teamId: team.teamId,
+      score: team.score,
+      opponent: opponent.name,
+      opponentScore: opponent.score,
+      margin: roundedToHundredths(winner.score - loser.score),
+    });
+  }
+  return results;
+}
+
+function computeHeartbreaker(matchups: NormalizedMatchup[]): CloseOrLopsidedResult | undefined {
+  let closestLoss: CloseOrLopsidedResult | undefined;
+  for (const loss of decidedResults(matchups, 'loser')) {
+    if (!closestLoss || loss.margin < closestLoss.margin) closestLoss = loss;
+  }
+  return closestLoss && closestLoss.margin <= HEARTBREAKER_MAX_MARGIN ? closestLoss : undefined;
+}
+
+function computeMercyRule(matchups: NormalizedMatchup[]): CloseOrLopsidedResult | undefined {
+  let biggestWin: CloseOrLopsidedResult | undefined;
+  for (const win of decidedResults(matchups, 'winner')) {
+    if (!biggestWin || win.margin > biggestWin.margin) biggestWin = win;
+  }
+  return biggestWin && biggestWin.margin >= MERCY_RULE_MIN_MARGIN ? biggestWin : undefined;
+}
+
+const winningTeams = (matchups: NormalizedMatchup[]): NormalizedTeam[] =>
+  matchups
+    .filter((matchup) => matchup.home.score !== matchup.away.score)
+    .map((matchup) => (matchup.home.score > matchup.away.score ? matchup.home : matchup.away));
+
+function computeOneManArmy(matchups: NormalizedMatchup[]): WeekAwards['oneManArmy'] {
+  let biggestShare: WeekAwards['oneManArmy'];
+  for (const team of winningTeams(matchups)) {
+    if (team.score <= 0) continue;
+    for (const starter of startersOf(team)) {
+      const share = starter.points / team.score;
+      if (!biggestShare || share > biggestShare.share) {
+        biggestShare = { team: team.name, teamId: team.teamId, player: starter.name, points: starter.points, teamScore: team.score, share };
+      }
+    }
+  }
+  return biggestShare && biggestShare.share >= ONE_MAN_ARMY_MIN_PERCENT / 100 ? biggestShare : undefined;
+}
+
 /**
  * How `teamId`'s matchup went, and whether `fixedScore` (their score without the mistake) would
  * have won it (`mistakeCostTheWin`), so the roast can't claim a bench mistake cost a game that was won anyway.
@@ -288,7 +373,9 @@ export function matchupOutcome(
 }
 
 /**
- * Compute all seven awards for one week from its normalized matchups.
+ * Compute the seven awards for one week from its normalized matchups, plus the bonus awards
+ * (Heartbreaker, Mercy Rule, One-Man Army) when someone reached the threshold. A bonus award
+ * nobody won is undefined.
  *
  * Awards carry the winner's `teamId` because season tallies count by id, not name: managers
  * rename teams mid-season. `teamId` is missing only on empty placeholders: no Bonehead when no
@@ -319,5 +406,8 @@ export function computeAwards(matchups: NormalizedMatchup[], week: number): Week
         : { ...bonehead, matchup: matchupOutcome(matchups, bonehead.teamId, (score) => score + bonehead.regret) },
     backedIntoIt,
     robbed,
+    heartbreaker: computeHeartbreaker(matchups),
+    mercyRule: computeMercyRule(matchups),
+    oneManArmy: computeOneManArmy(matchups),
   };
 }

@@ -22,10 +22,10 @@ export const ROAST_PROMPT = `You are the master roaster for a fantasy football l
 Voice: funny, savage but good-natured, high group-chat energy. Roast the losers, hype the winners.
 Constraints:
 - 150–250 words total.
-- Mention every award, using its exact name (e.g. "The Juggernaut", "The Bonehead").
+- Mention every award, using its exact name (e.g. "The Juggernaut", "The Bonehead"). Awards under "Bonus awards this week" are optional: use them only if they make a good joke. An award named only in the "Season so far" section doesn't need a mention.
 - Write award names in normal title case (e.g. "Baller of the Week"), never in all caps.
 - Use the exact team names, player names, and point totals from the fact sheet. Never invent numbers or winners.
-- Every number above ${MAX_FREE_NUMBER} must come from the fact sheet, as written or rounded to a whole number. Don't do your own math (the sheet has the margins), and no percentages, years or other stats.
+- Every number above ${MAX_FREE_NUMBER} must come from the fact sheet, as written or rounded to a whole number. Don't do your own math (the sheet has the margins), and no percentages (except the One-Man Army share from the sheet), years or other stats.
 - Only say a bench or start/sit mistake cost a team the game when the fact sheet says so. If they still won, roast them for getting away with it.
 - If the fact sheet has a "Season so far" section, you may add a callback or two about it (e.g. a team's third Corpse). Keep the focus on this week, and only use season counts that appear in the sheet.
 - Plain text suitable for pasting into WhatsApp. A few emojis are fine. No markdown headings, no bullet characters like "*".`;
@@ -40,7 +40,7 @@ Compare the draft with the fact sheet and reject it if any of these are true:
 - An award is given to the wrong team or player, or a team or player is credited with something they didn't do.
 - A number, season count or result doesn't match the sheet.
 - It says a mistake cost a team the game, or that a team won or lost, when the sheet says otherwise.
-- An award from the sheet is missing.
+- An award from this week's main list is missing. Awards under "Bonus awards this week", and awards named only in the "Season so far" section, are optional and may be left out.
 - It's clearly outside 150–250 words.
 Jokes, exaggeration and insults are fine as long as the facts are right. List each problem as one short,
 specific sentence the writer can act on. Approve with no issues if the draft is accurate.`;

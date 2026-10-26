@@ -1,7 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import {
   AWARDS,
+  NOBODY_BLUNDERED_REASON,
   slotLabel,
+  wholePercent,
   type AllPlayRecord,
   type AwardKey,
   type MatchupOutcome,
@@ -65,7 +67,12 @@ export function factSheet(awards: WeekAwards, leaderboard?: SeasonLeaderboard): 
     awardFact('corpse', `${awards.corpse.team} — ${formatPoints(awards.corpse.score)} pts`),
     awardFact('ballerOfTheWeek', `${awards.ballerOfTheWeek.player} on ${awards.ballerOfTheWeek.team} — ${formatPoints(awards.ballerOfTheWeek.points)} pts`),
     awardFact('sleepwalker', `${awards.sleepwalker.team} — left ${formatPoints(awards.sleepwalker.pointsLeft)} pts on the bench (started ${formatPoints(awards.sleepwalker.actual)}, optimal was ${formatPoints(awards.sleepwalker.optimal)}).${outcomeText(awards.sleepwalker.team, awards.sleepwalker.matchup, SLEEPWALKER_MISTAKE)}`),
-    awardFact('bonehead', `${awards.bonehead.team} benched ${awards.bonehead.benched} (${formatPoints(awards.bonehead.benchedPoints)}) and started ${awards.bonehead.started} (${formatPoints(awards.bonehead.startedPoints)}) at ${slotLabel(awards.bonehead.slot)} — a ${formatPoints(awards.bonehead.regret)}-pt blunder.${outcomeText(awards.bonehead.team, awards.bonehead.matchup, BONEHEAD_MISTAKE)}`),
+    awardFact(
+      'bonehead',
+      awards.bonehead.teamId === undefined
+        ? `nobody, since ${NOBODY_BLUNDERED_REASON}`
+        : `${awards.bonehead.team} benched ${awards.bonehead.benched} (${formatPoints(awards.bonehead.benchedPoints)}) and started ${awards.bonehead.started} (${formatPoints(awards.bonehead.startedPoints)}) at ${slotLabel(awards.bonehead.slot)} — a ${formatPoints(awards.bonehead.regret)}-pt blunder.${outcomeText(awards.bonehead.team, awards.bonehead.matchup, BONEHEAD_MISTAKE)}`,
+    ),
     awardFact(
       'backedIntoIt',
       awards.backedIntoIt.teamId === undefined
@@ -79,20 +86,37 @@ export function factSheet(awards: WeekAwards, leaderboard?: SeasonLeaderboard): 
         : `${awards.robbed.team} lost with ${formatPoints(awards.robbed.score)} pts (would have beaten ${allPlayText(awards.robbed.allPlay)})`,
     ),
   ];
+  const bonusFacts = bonusAwardFacts(awards);
+  if (bonusFacts.length > 0) lines.push('', 'Bonus awards this week (optional to mention):', ...bonusFacts);
   if (awards.results.length > 0) lines.push('', 'Matchup results:', ...awards.results.map(resultLine));
   if (leaderboard) lines.push('', ...seasonFacts(awards, leaderboard));
   return lines.join('\n');
 }
 
+function bonusAwardFacts({ heartbreaker, mercyRule, oneManArmy }: WeekAwards): string[] {
+  const facts: string[] = [];
+  if (heartbreaker) {
+    facts.push(awardFact('heartbreaker', `${heartbreaker.team} lost ${formatPoints(heartbreaker.score)}–${formatPoints(heartbreaker.opponentScore)} to ${heartbreaker.opponent}, by ${formatPoints(heartbreaker.margin)}`));
+  }
+  if (mercyRule) {
+    facts.push(awardFact('mercyRule', `${mercyRule.team} beat ${mercyRule.opponent} ${formatPoints(mercyRule.score)}–${formatPoints(mercyRule.opponentScore)}, by ${formatPoints(mercyRule.margin)}`));
+  }
+  if (oneManArmy) {
+    facts.push(awardFact('oneManArmy', `${oneManArmy.player} scored ${formatPoints(oneManArmy.points)} of ${oneManArmy.team}'s ${formatPoints(oneManArmy.teamScore)} pts (${wholePercent(oneManArmy.share)})`));
+  }
+  return facts;
+}
+
 function seasonFacts(awards: WeekAwards, leaderboard: SeasonLeaderboard): string[] {
   const lines = [`Season so far (${describeWeeks(leaderboard.weeks)}):`];
   for (const key of SEASON_AWARD_KEYS) {
-    const teamId = awards[key].teamId;
-    if (teamId === undefined) continue;
+    const award = awards[key];
+    const teamId = award?.teamId;
+    if (!award || teamId === undefined) continue;
     const wins = leaderboard.winsByTeamId[key].get(teamId) ?? 0;
     const isRepeatWinner = wins >= 2;
     const isShownOnLeaderboard = wins >= MIN_WINS_TO_LEAD[key];
-    if (isRepeatWinner && isShownOnLeaderboard) lines.push(`- ${awards[key].team} has now won ${AWARDS[key].name} ${wins} times this season (including this week).`);
+    if (isRepeatWinner && isShownOnLeaderboard) lines.push(`- ${award.team} has now won ${AWARDS[key].name} ${wins} times this season (including this week).`);
   }
   for (const key of SEASON_AWARD_KEYS) {
     const leader = leaderboard.leaders[key];
